@@ -7,7 +7,7 @@ set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-gcc)
 set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-g++)
 set(CMAKE_RC_COMPILER ${TOOLCHAIN_PREFIX}-windres)
 
-set(CMAKE_SYSROOT /home/sk/junk/mingw-builds/install/)
+#set(CMAKE_SYSROOT /home/sk/junk/mingw-builds/install/)
 set(CMAKE_FIND_ROOT_PATH ${CMAKE_SYSROOT})
 
 # Never search host paths
