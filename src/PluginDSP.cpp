@@ -52,7 +52,7 @@ protected:
     */
     const char* getLabel() const noexcept override
     {
-        return "SimpleGain";
+        return "BAKED";
     }
 
    /**
@@ -61,7 +61,7 @@ protected:
     */
     const char* getDescription() const override
     {
-        return "A simple audio volume gain plugin with ImGui for its GUI";
+        return "Sampler with precomputed effects";
     }
 
    /**
@@ -69,7 +69,7 @@ protected:
     */
     const char* getMaker() const noexcept override
     {
-        return "Jean Pierre Cimalando, falkTX";
+        return "Jean Pierre Cimalando, falkTX, Saber";
     }
 
    /**
@@ -97,7 +97,7 @@ protected:
     */
     int64_t getUniqueId() const noexcept override
     {
-        return d_cconst('d', 'I', 'm', 'G');
+        return d_cconst('B', 'A', 'K', 'D');
     }
 
     // ----------------------------------------------------------------------------------------------------------------
@@ -164,11 +164,11 @@ protected:
       Run/process function for plugins without MIDI input.
       @note Some parameters might be null if there are no audio inputs or outputs.
     */
-    void run(const float** inputs, float** outputs, uint32_t frames) override
+    void run(const float** inputs, float** outputs, uint32_t frames, const MidiEvent* midiEvents, uint32_t midiEventCount) override
     {
-        // get the left and right audio inputs
-        const float* const inpL = inputs[0];
-        const float* const inpR = inputs[1];
+        // // get the left and right audio inputs
+        // const float* const inpL = inputs[0];
+        // const float* const inpR = inputs[1];
 
         // get the left and right audio outputs
         float* const outL = outputs[0];
@@ -178,8 +178,8 @@ protected:
         for (uint32_t i=0; i < frames; ++i)
         {
             const float gain = fSmoothGain.next();
-            outL[i] = inpL[i] * gain;
-            outR[i] = inpR[i] * gain;
+            outL[i] = 1 * gain;
+            outR[i] = 1 * gain;
         }
     }
 

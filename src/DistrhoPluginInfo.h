@@ -10,13 +10,13 @@
    This is used to identify your plugin before a Plugin instance can be created.
    @note This macro is required.
  */
-#define DISTRHO_PLUGIN_NAME "ImGuiSimpleGain"
+#define DISTRHO_PLUGIN_NAME "BAKED"
 
 /**
    Number of audio inputs the plugin has.
    @note This macro is required.
  */
-#define DISTRHO_PLUGIN_NUM_INPUTS 2
+#define DISTRHO_PLUGIN_NUM_INPUTS 0
 
 /**
    Number of audio outputs the plugin has.
@@ -48,7 +48,7 @@
    @ref DISTRHO_PLUGIN_WANT_MIDI_INPUT is automatically enabled when this is too.
    @see DISTRHO_PLUGIN_WANT_MIDI_INPUT
  */
-#define DISTRHO_PLUGIN_IS_SYNTH 0
+#define DISTRHO_PLUGIN_IS_SYNTH 1
 
 /**
    Enable direct access between the %UI and plugin code.
@@ -68,7 +68,7 @@
    Whether the plugin wants MIDI input.@n
    This is automatically enabled if @ref DISTRHO_PLUGIN_IS_SYNTH is true.
  */
-#define DISTRHO_PLUGIN_WANT_MIDI_INPUT 0
+#define DISTRHO_PLUGIN_WANT_MIDI_INPUT 1
 
 /**
    Whether the plugin wants MIDI output.
@@ -96,7 +96,7 @@
    @see Plugin::initState(uint32_t, String&, String&)
    @see Plugin::setState(const char*, const char*)
  */
-#define DISTRHO_PLUGIN_WANT_STATE 0
+#define DISTRHO_PLUGIN_WANT_STATE 1
 
 /**
    Whether the plugin implements the full state API.
@@ -106,7 +106,7 @@
    @note this macro is automatically enabled if a plugin has programs and state, as the key-value state pairs need to be updated when the current program changes.
    @see Plugin::getState(const char*)
  */
-#define DISTRHO_PLUGIN_WANT_FULL_STATE 0
+#define DISTRHO_PLUGIN_WANT_FULL_STATE 1
 
 /**
    Whether the plugin wants time position information from the host.
@@ -223,7 +223,7 @@
 
    See http://lv2plug.in/ns/lv2core for more information.
  */
-#define DISTRHO_PLUGIN_LV2_CATEGORY "lv2:AmplifierPlugin"
+#define DISTRHO_PLUGIN_LV2_CATEGORY "lv2:InstrumentPlugin"
 
 /**
    Custom VST3 categories for the plugin.@n
@@ -267,7 +267,7 @@
       - Mono
       - Stereo
  */
-#define DISTRHO_PLUGIN_VST3_CATEGORIES "Fx|Dynamics|Stereo"
+#define DISTRHO_PLUGIN_VST3_CATEGORIES "Instrument|Sampler|Stereo"
 
 /**
    Custom CLAP features for the plugin.@n
@@ -325,10 +325,10 @@
       - surround
       - ambisonic
 */
-#define DISTRHO_PLUGIN_CLAP_FEATURES "audio-effect", "stereo"
+#define DISTRHO_PLUGIN_CLAP_FEATURES "sampler", "stereo"
 
 /**
    The plugin id when exporting in CLAP format, in reverse URI form.
    @note This macro is required when building CLAP plugins
 */
-#define DISTRHO_PLUGIN_CLAP_ID "studio.kx.distrho.examples.imguisimplegain"
+#define DISTRHO_PLUGIN_CLAP_ID "saber.BAKED"
