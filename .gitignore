@@ -1,6 +1,10 @@
 # build target dir
 /bin/
-
+/nonexistenfolder/
+/build/
+/winbuild/
+/.qtcreator/
+/venv/
 # cmake temp files that remain around
 CMakeFiles/
 cmake_install.cmake
