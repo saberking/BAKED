@@ -160,6 +160,12 @@ protected:
         fSmoothGain.clearToTargetValue();
     }
 
+    String getState(const char* key) const override {
+
+        // Fallback to the base class implementation for unhandled keys
+        return Plugin::getState(key);
+    }
+
    /**
       Run/process function for plugins without MIDI input.
       @note Some parameters might be null if there are no audio inputs or outputs.
