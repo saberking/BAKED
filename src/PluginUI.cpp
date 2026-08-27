@@ -7,6 +7,8 @@
 
 #include "DistrhoUI.hpp"
 #include "ResizeHandle.hpp"
+#include "Parameters.hpp"
+
 
 START_NAMESPACE_DISTRHO
 
@@ -14,7 +16,7 @@ START_NAMESPACE_DISTRHO
 
 class ImGuiPluginUI : public UI
 {
-    float fGain = 0.0f;
+    float fRelease = 0.0f;
     ResizeHandle fResizeHandle;
 
     // ----------------------------------------------------------------------------------------------------------------
@@ -46,9 +48,9 @@ protected:
     */
     void parameterChanged(uint32_t index, float value) override
     {
-        DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
+        //DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
 
-        fGain = value;
+        fRelease = value;
         repaint();
     }
 
@@ -69,17 +71,17 @@ protected:
 
         if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize))
         {
-            if (ImGui::SliderFloat("Gain (dB)", &fGain, -90.0f, 30.0f))
+            if (ImGui::SliderFloat("Release", &fRelease, 0.f, 4000.f))
             {
                 if (ImGui::IsItemActivated())
-                    editParameter(0, true);
+                    editParameter(kParamRelease, true);
 
-                setParameterValue(0, fGain);
+                setParameterValue(kParamRelease, fRelease);
             }
 
             if (ImGui::IsItemDeactivated())
             {
-                editParameter(0, false);
+                editParameter(kParamRelease, false);
             }
         }
         ImGui::End();

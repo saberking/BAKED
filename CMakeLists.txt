@@ -37,6 +37,11 @@ dpf_add_plugin(${NAME}
 
       dpf-widgets/opengl/DearImGui.cpp)
 
+target_sources(Baked
+  PRIVATE
+    src/Parameters.hpp
+)
+
 target_include_directories(${NAME} PUBLIC src)
 target_include_directories(${NAME} PUBLIC dpf-widgets/generic)
 target_include_directories(${NAME} PUBLIC dpf-widgets/opengl)

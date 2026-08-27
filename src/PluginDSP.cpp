@@ -7,26 +7,17 @@
 
 #include "DistrhoPlugin.hpp"
 #include "extra/ValueSmoother.hpp"
+#include "Parameters.hpp"
 
 START_NAMESPACE_DISTRHO
 
-// --------------------------------------------------------------------------------------------------------------------
-
-static constexpr const float db2coef(float g)
-{
-    return g > -90.f ? std::pow(10.f, g * 0.05f) : 0.f;
-}
 
 // --------------------------------------------------------------------------------------------------------------------
 
 class ImGuiPluginDSP : public Plugin
 {
-    enum Parameters {
-        kParamGain = 0,
-        kParamCount
-    };
 
-    float fGainDB = 0.0f;
+    float fRelease = 0.0f;
     ExponentialValueSmoother fSmoothGain;
 
 public:
@@ -38,7 +29,7 @@ public:
         : Plugin(kParamCount, 0, 0) // parameters, programs, states
     {
         fSmoothGain.setSampleRate(getSampleRate());
-        fSmoothGain.setTargetValue(db2coef(0.f));
+        fSmoothGain.setTargetValue(0.f);
         fSmoothGain.setTimeConstant(0.020f); // 20ms
     }
 
@@ -111,14 +102,13 @@ protected:
     {
         DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
 
-        parameter.ranges.min = -90.f;
-        parameter.ranges.max = 30.f;
+        parameter.ranges.min = 0.f;
+        parameter.ranges.max = 4000.f;
         parameter.ranges.def = 0.f;
-        parameter.hints = kParameterIsAutomatable;
-        parameter.name = "Gain";
-        parameter.shortName = "Gain";
-        parameter.symbol = "gain";
-        parameter.unit = "dB";
+        parameter.name = "Release";
+        parameter.shortName = "Release";
+        parameter.symbol = "release";
+        parameter.unit = "ms";
     }
 
     // ----------------------------------------------------------------------------------------------------------------
@@ -131,8 +121,10 @@ protected:
     float getParameterValue(uint32_t index) const override
     {
         DISTRHO_SAFE_ASSERT_RETURN(index == 0, 0.f);
-
-        return fGainDB;
+        if(index==kParamRelease){
+            return fRelease;
+        }
+        return -999.f;
     }
 
    /**
@@ -145,8 +137,8 @@ protected:
     {
         DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
 
-        fGainDB = value;
-        fSmoothGain.setTargetValue(db2coef(std::clamp(value, -90.f, 30.f)));
+        fRelease = value;
+        fSmoothGain.setTargetValue(std::clamp(value, 0.f, 4000.f));
     }
 
     // ----------------------------------------------------------------------------------------------------------------
@@ -164,6 +156,10 @@ protected:
 
         // Fallback to the base class implementation for unhandled keys
         return Plugin::getState(key);
+    }
+
+    void setState(const char* key, const char* value) override {
+        // do nothing
     }
 
    /**
