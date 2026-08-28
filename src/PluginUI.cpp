@@ -17,6 +17,8 @@ START_NAMESPACE_DISTRHO
 class ImGuiPluginUI : public UI
 {
     float fRelease = 0.0f;
+    char sampleFilePath[256];
+
     ResizeHandle fResizeHandle;
 
     // ----------------------------------------------------------------------------------------------------------------
@@ -32,10 +34,12 @@ public:
     {
         const double scaleFactor = getScaleFactor();
         setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
+        strcpy(sampleFilePath, "Drop Audio File Here");
 
         // hide handle if UI is resizable
         if (isResizable())
             fResizeHandle.hide();
+        //getAppWindow().setDropTarget(this);
     }
 
 protected:
@@ -71,6 +75,9 @@ protected:
 
         if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize))
         {
+
+
+
             if (ImGui::SliderFloat("Release", &fRelease, 0.f, 4000.f))
             {
                 if (ImGui::IsItemActivated())

@@ -18,6 +18,7 @@ class ImGuiPluginDSP : public Plugin
 {
 
     float fRelease = 0.0f;
+    char sampleFilePath[256];
     ExponentialValueSmoother fSmoothGain;
 
 public:
@@ -31,6 +32,7 @@ public:
         fSmoothGain.setSampleRate(getSampleRate());
         fSmoothGain.setTargetValue(0.f);
         fSmoothGain.setTimeConstant(0.020f); // 20ms
+        strcpy(sampleFilePath, "Drop Audio File Here");
     }
 
 protected:
@@ -154,12 +156,11 @@ protected:
 
     String getState(const char* key) const override {
 
-        // Fallback to the base class implementation for unhandled keys
-        return Plugin::getState(key);
+        return (String) sampleFilePath;
     }
 
     void setState(const char* key, const char* value) override {
-        // do nothing
+        strcpy(sampleFilePath, value);
     }
 
    /**
