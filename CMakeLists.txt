@@ -47,3 +47,4 @@ target_include_directories(${NAME} PUBLIC dpf-widgets/generic)
 target_include_directories(${NAME} PUBLIC dpf-widgets/opengl)
 target_include_directories(${NAME} PUBLIC dpf-widgets/opengl/DearImGui)
 
+target_link_libraries(Baked-vst3 PRIVATE comctl32)

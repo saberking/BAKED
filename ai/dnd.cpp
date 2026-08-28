@@ -1,85 +1,101 @@
 #include "DistrhoUI.hpp"
 #include "imgui.h"
-#include "imgui_impl_win32.h"
-#include "imgui_impl_dx11.h"
 
+// 1. Lock all Windows-specific code inside an ifdef shield
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
-#include <commctrl.h> // Required for DefSubclassProc and SetWindowSubclass
-#pragma comment(lib, "comctl32.lib")
-
-// 1. Your custom Windows message listener
-LRESULT CALLBACK MyPluginWindowSubclass(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, 
-                                        UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
-{
-    // External ImGui handler for window sizing/inputs
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, uMsg, wParam, lParam))
-        return true;
-
-    switch (uMsg)
-    {
-        case WM_DROPFILES:
-        {
-            HDROP hDrop = reinterpret_cast<HDROP>(wParam);
-            char droppedFilePath[MAX_PATH];
-            
-            // Extract the first dropped file path
-            if (DragQueryFileA(hDrop, 0, droppedFilePath, MAX_PATH))
-            {
-                // Access your UI class instance pointer passed via dwRefData
-                auto* myUI = reinterpret_cast<MyPluginUI*>(dwRefData);
-                myUI->setDroppedFilePath(droppedFilePath);
-            }
-            
-            DragFinish(hDrop);
-            return 0; // Tell Windows we handled this message
-        }
-        
-        case WM_NCDESTROY:
-            // Clean up the subclass hook when the window dies
-            RemoveWindowSubclass(hwnd, MyPluginWindowSubclass, uIdSubclass);
-            break;
-    }
-
-    // Pass all other messages (mouse clicks, movement) straight to DPF/Pugl!
-    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
-}
+#include <commctrl.h> // Required for subclassing functions
 #endif
 
 START_NAMESPACE_DISTRHO
 
+// Forward declaration of our class so the Windows function knows it exists
+class MyPluginUI;
+
+#ifdef _WIN32
+// 2. The custom Windows message guard function
+LRESULT CALLBACK MyFileDropSubclass(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
+                                    UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    if (uMsg == WM_DROPFILES)
+    {
+        HDROP hDrop = reinterpret_cast<HDROP>(wParam);
+        char droppedPath[MAX_PATH];
+
+        // Extract the file path string from the drop event
+        if (DragQueryFileA(hDrop, 0, droppedPath, MAX_PATH))
+        {
+            // Cast 'dwRefData' back into our specific C++ plugin instance
+            MyPluginUI* myUI = reinterpret_cast<MyPluginUI*>(dwRefData);
+
+            // Pass the path directly to our plugin variable
+            myUI->setDroppedFilePath(droppedPath);
+        }
+
+        DragFinish(hDrop);
+        return 0; // Tell Windows we handled the file drop safely
+    }
+
+    // Let the template plugin handle all other inputs (mouse, keys) normally!
+    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
+}
+#endif
+
+// 3. Your Main DPF UI Class
 class MyPluginUI : public UI
 {
 private:
-    std::string currentFilePath = "";
+    std::string currentFilePath = ""; // Variable to store our loaded file path
 
 public:
+    // This is your UI constructor (runs once when the plugin window opens)
     MyPluginUI() : UI()
     {
-#ifdef _WIN32
+        #ifdef _WIN32
+        // Get the blank window handle that DPF already opened for us
         HWND pluginHwnd = (HWND)getNativeWindowHandle();
+
         if (pluginHwnd != NULL)
         {
-            // 2. Tell the OS this window accepts file drops
+            // Tell Windows this window is allowed to receive file drops
             DragAcceptFiles(pluginHwnd, TRUE);
 
-            // 3. Inject our subclass listener over DPF, passing 'this' UI pointer as reference data
-            SetWindowSubclass(pluginHwnd, MyPluginWindowSubclass, 1, (DWORD_PTR)this);
-            
-            // 4. Safely initialize Dear ImGui on top of the raw handle
-            ImGui_ImplWin32_Init(pluginHwnd);
-            // (Initialize your DX11 context here as well...)
+            // Hook our message guard, passing 'this' specific instance as the reference data
+            SetWindowSubclass(pluginHwnd, MyFileDropSubclass, 1, (DWORD_PTR)this);
         }
-#endif
+        #endif
     }
 
+    // A helper function to let the Windows code update our C++ string variable
     void setDroppedFilePath(const char* path)
     {
         currentFilePath = path;
     }
 
-    // ... Your standard DPF UI rendering loop where you call your ImGui frames
+    // 4. This is your standard template drawing loop
+    // (Note: Depending on your template version, this might be called onImGuiDisplay)
+    void postDisplay() override
+    {
+        // NO DIRECTX CODE NEEDED! Just use standard ImGui commands:
+        ImGui::Begin("My Sample Plugin");
+
+        if (!currentFilePath.empty())
+        {
+            ImGui::Text("Loaded Sample Path:");
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "%s", currentFilePath.c_str());
+        }
+        else
+        {
+            ImGui::Text("Drag and drop a .wav file anywhere on this window...");
+        }
+
+        ImGui::End();
+    }
 };
+
+UI* createUI() {
+    return new MyPluginUI();
+}
 
 END_NAMESPACE_DISTRHO
