@@ -34,7 +34,10 @@ public:
       The UI should be initialized to a default state that matches the plugin side.
     */
     ImGuiPluginUI();
-
+    void setDroppedFilePath(const char* path)
+    {
+        strcpy(sampleFilePath, path);
+    }
 
 protected:
     // ----------------------------------------------------------------------------------------------------------------
@@ -78,7 +81,7 @@ LRESULT CALLBACK MyFileDropSubclass(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
             ImGuiPluginUI* myUI = reinterpret_cast<ImGuiPluginUI*>(dwRefData);
 
             // Pass the path directly to our plugin variable
-            //myUI->setDroppedFilePath(droppedPath);
+            myUI->setDroppedFilePath(droppedPath);
         }
 
         DragFinish(hDrop);
@@ -101,7 +104,16 @@ ImGuiPluginUI::ImGuiPluginUI()
     // hide handle if UI is resizable
     if (isResizable())
         fResizeHandle.hide();
-    //getAppWindow().setDropTarget(this);
+    HWND pluginHwnd = (HWND)getWindow().getNativeWindowHandle();
+
+    if (pluginHwnd != NULL)
+    {
+        // Tell Windows this window is allowed to receive file drops
+        DragAcceptFiles(pluginHwnd, TRUE);
+
+        // Hook our message guard, passing 'this' specific instance as the reference data
+        SetWindowSubclass(pluginHwnd, MyFileDropSubclass, 1, (DWORD_PTR)this);
+    }
 
 }
 void ImGuiPluginUI::onImGuiDisplay(){
@@ -109,16 +121,7 @@ void ImGuiPluginUI::onImGuiDisplay(){
         const float width = getWidth();
         const float height = getHeight();
         const float margin = 20.0f * getScaleFactor();
-        HWND pluginHwnd = (HWND)getWindow().getNativeWindowHandle();
 
-        if (pluginHwnd != NULL)
-        {
-            // Tell Windows this window is allowed to receive file drops
-            DragAcceptFiles(pluginHwnd, TRUE);
-
-            // Hook our message guard, passing 'this' specific instance as the reference data
-            SetWindowSubclass(pluginHwnd, MyFileDropSubclass, 1, (DWORD_PTR)this);
-        }
         ImGui::SetNextWindowPos(ImVec2(margin, margin));
         ImGui::SetNextWindowSize(ImVec2(width - 2 * margin, height - 2 * margin));
 
@@ -134,6 +137,8 @@ void ImGuiPluginUI::onImGuiDisplay(){
 
                 setParameterValue(kParamRelease, fRelease);
             }
+
+                ImGui::Text("%s", sampleFilePath);
 
             if (ImGui::IsItemDeactivated())
             {
