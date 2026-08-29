@@ -23,6 +23,7 @@ project(${NAME})
 add_subdirectory(dpf)
 
 set(TARGETS_LIST "vst3")
+list(APPEND TARGETS_LIST "clap")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND TARGETS_LIST "jack")

@@ -1,101 +1,99 @@
-#include "DistrhoUI.hpp"
-#include "imgui.h"
+The Minimal OLE Drop Target Code (No Framework Needed)This is standard C++ Windows code that implements Microsoft's IDropTarget interface. It will capture the modern file stream that Dolphin throws, extract the path, and hand it to your template plugin.Paste this code directly into the top of your PluginUI.cpp:cpp
 
-// 1. Lock all Windows-specific code inside an ifdef shield
-#ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
-#include <commctrl.h> // Required for subclassing functions
-#endif
+#include <ole2.h> // Required for OLE Drag and Drop
 
-START_NAMESPACE_DISTRHO
+    START_NAMESPACE_DISTRHO
 
-// Forward declaration of our class so the Windows function knows it exists
-class MyPluginUI;
+    class ImGuiPluginUI;
 
-#ifdef _WIN32
-// 2. The custom Windows message guard function
-LRESULT CALLBACK MyFileDropSubclass(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
-                                    UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
-{
-    if (uMsg == WM_DROPFILES)
-    {
-        HDROP hDrop = reinterpret_cast<HDROP>(wParam);
-        char droppedPath[MAX_PATH];
-
-        // Extract the file path string from the drop event
-        if (DragQueryFileA(hDrop, 0, droppedPath, MAX_PATH))
-        {
-            // Cast 'dwRefData' back into our specific C++ plugin instance
-            MyPluginUI* myUI = reinterpret_cast<MyPluginUI*>(dwRefData);
-
-            // Pass the path directly to our plugin variable
-            myUI->setDroppedFilePath(droppedPath);
-        }
-
-        DragFinish(hDrop);
-        return 0; // Tell Windows we handled the file drop safely
-    }
-
-    // Let the template plugin handle all other inputs (mouse, keys) normally!
-    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
-}
-#endif
-
-// 3. Your Main DPF UI Class
-class MyPluginUI : public UI
+// --------------------------------------------------------------------------------------------------------------------
+// A clean, lightweight OLE Interceptor that forces Windows to extract files for us
+class MyOleDropTarget : public IDropTarget
 {
 private:
-    std::string currentFilePath = ""; // Variable to store our loaded file path
+    ULONG m_refCount = 1;
+    ImGuiPluginUI* m_ui = nullptr;
 
 public:
-    // This is your UI constructor (runs once when the plugin window opens)
-    MyPluginUI() : UI()
-    {
-        #ifdef _WIN32
-        // Get the blank window handle that DPF already opened for us
-        HWND pluginHwnd = (HWND)getNativeWindowHandle();
+    MyOleDropTarget(ImGuiPluginUI* ui) : m_ui(ui) {}
 
-        if (pluginHwnd != NULL)
-        {
-            // Tell Windows this window is allowed to receive file drops
-            DragAcceptFiles(pluginHwnd, TRUE);
-
-            // Hook our message guard, passing 'this' specific instance as the reference data
-            SetWindowSubclass(pluginHwnd, MyFileDropSubclass, 1, (DWORD_PTR)this);
+    // Standard COM Plumbing Functions
+    STDMETHODIMP QueryInterface(REFIID riid, void** ppvObj) {
+        if (riid == IID_IUnknown || riid == IID_IDropTarget) {
+            *ppvObj = static_cast<IDropTarget*>(this);
+            AddRef();
+            return S_OK;
         }
-        #endif
+        *ppvObj = NULL; return E_NOINTERFACE;
+    }
+    STDMETHODIMP_(ULONG) AddRef() { return InterlockedIncrement(&m_refCount); }
+    STDMETHODIMP_(ULONG) Release() {
+        ULONG res = InterlockedDecrement(&m_refCount);
+        if (res == 0) delete this; return res;
     }
 
-    // A helper function to let the Windows code update our C++ string variable
-    void setDroppedFilePath(const char* path)
-    {
-        currentFilePath = path;
+    // This forces FL Studio/Wine to change the cursor to a "Copy File" symbol
+    STDMETHODIMP DragEnter(IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect) {
+        *pdwEffect = DROPEFFECT_COPY; return S_OK;
     }
+    STDMETHODIMP DragOver(DWORD grfKeyState, POINTL pt, DWORD* pdwEffect) {
+        *pdwEffect = DROPEFFECT_COPY; return S_OK;
+    }
+    STDMETHODIMP DragLeave() { return S_OK; }
 
-    // 4. This is your standard template drawing loop
-    // (Note: Depending on your template version, this might be called onImGuiDisplay)
-    void postDisplay() override
+    // THE MAGIC MOMENT: This runs when you let go of the mouse!
+    STDMETHODIMP Drop(IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect)
     {
-        // NO DIRECTX CODE NEEDED! Just use standard ImGui commands:
-        ImGui::Begin("My Sample Plugin");
+        FORMATETC fmt = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+        STGMEDIUM stg;
 
-        if (!currentFilePath.empty())
+        // Extract the file block from the rich OLE Data Object
+        if (pDataObj->GetData(&fmt, &stg) == S_OK)
         {
-            ImGui::Text("Loaded Sample Path:");
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "%s", currentFilePath.c_str());
-        }
-        else
-        {
-            ImGui::Text("Drag and drop a .wav file anywhere on this window...");
+            HDROP hDrop = (HDROP)GlobalLock(stg.hGlobal);
+            char droppedPath[MAX_PATH];
+
+            if (DragQueryFileA(hDrop, 0, droppedPath, MAX_PATH))
+            {
+                // Send the path straight to your ImGui variable!
+                m_ui->setDroppedFilePath(droppedPath);
+            }
+
+            GlobalUnlock(stg.hGlobal);
+            ReleaseStgMedium(&stg);
         }
 
-        ImGui::End();
+        *pdwEffect = DROPEFFECT_COPY;
+        return S_OK;
     }
 };
+Use code with caution.Step 2: Update Your Constructor to Use the OLE TargetNow, delete your old SetWindowSubclass loops entirely. Inside your ImGuiPluginUI::ImGuiPluginUI() constructor, initialize the OLE library and bind our new target straight onto the template window handle:cpp
+ImGuiPluginUI::ImGuiPluginUI()
+    : UI(),
+    fResizeHandle(this)
+{
+    const double scaleFactor = getScaleFactor();
+    setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
 
-UI* createUI() {
-    return new MyPluginUI();
+    strcpy(sampleFilePath, "Drop Audio File Here");
+
+    if (isResizable())
+        fResizeHandle.hide();
+
+    // 1. Initialize Windows OLE engine (Crucial for Drag & Drop!)
+    OleInitialize(NULL);
+
+    // 2. Grab the window handle from the DPF template context
+    HWND pluginHwnd = (HWND)getWindow().getNativeWindowHandle();
+
+    if (pluginHwnd != NULL)
+    {
+        // 3. Create our custom OLE interceptor instance
+        MyOleDropTarget* dropTarget = new MyOleDropTarget(this);
+
+        // 4. Force the operating system to map our interceptor onto the plugin view window
+        RegisterDragDrop(pluginHwnd, dropTarget);
+    }
 }
-
-END_NAMESPACE_DISTRHO
