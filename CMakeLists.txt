@@ -35,12 +35,15 @@ dpf_add_plugin(${NAME}
       src/PluginDSP.cpp
   FILES_UI
       src/PluginUI.cpp
+      src/DragAndDrop.cpp
 
       dpf-widgets/opengl/DearImGui.cpp)
 
 target_sources(Baked
   PRIVATE
     src/Parameters.hpp
+    src/PluginUI.hpp
+    src/DragAndDrop.hpp
 )
 
 target_include_directories(${NAME} PUBLIC src)

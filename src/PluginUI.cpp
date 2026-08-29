@@ -5,95 +5,15 @@
  * SPDX-License-Identifier: ISC
  */
 
-// 1. CRUCIAL: Tell MinGW to unlock modern Windows OLE API features
-#ifndef WINVER
-#define WINVER 0x0601
-#endif
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0601
-#endif
-
-#include "DistrhoUI.hpp"
-#include "ResizeHandle.hpp"
-#include "Parameters.hpp"
-
-#include <windows.h>
-#include <shellapi.h>
-#include <ole2.h> // Required for OLE Drag and Drop
+#include "DragAndDrop.hpp"
 
 START_NAMESPACE_DISTRHO
 
-    class ImGuiPluginUI;
 
-class MyOleDropTarget : public IDropTarget
-{
-private:
-    ULONG m_refCount = 1;
-    ImGuiPluginUI* m_ui = nullptr;
-
-public:
-    MyOleDropTarget(ImGuiPluginUI* ui) : m_ui(ui) {}
-
-    // Standard COM Plumbing Functions
-    STDMETHODIMP QueryInterface(REFIID riid, void** ppvObj) {
-        if (riid == IID_IUnknown || riid == IID_IDropTarget) {
-            *ppvObj = static_cast<IDropTarget*>(this);
-            AddRef();
-            return S_OK;
-        }
-        *ppvObj = NULL; return E_NOINTERFACE;
-    }
-    STDMETHODIMP_(ULONG) AddRef() { return InterlockedIncrement(&m_refCount); }
-    STDMETHODIMP_(ULONG) Release() {
-        ULONG res = InterlockedDecrement(&m_refCount);
-        if (res == 0) delete this; return res;
-    }
-
-    // This forces FL Studio/Wine to change the cursor to a "Copy File" symbol
-    STDMETHODIMP DragEnter(IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect) {
-        *pdwEffect = DROPEFFECT_COPY; return S_OK;
-    }
-    STDMETHODIMP DragOver(DWORD grfKeyState, POINTL pt, DWORD* pdwEffect) {
-        *pdwEffect = DROPEFFECT_COPY; return S_OK;
-    }
-    STDMETHODIMP DragLeave() { return S_OK; }
-
-    // THE MAGIC MOMENT: This runs when you let go of the mouse!
-    STDMETHODIMP Drop(IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect);
-};
 
 // --------------------------------------------------------------------------------------------------------------------
 
-class ImGuiPluginUI : public UI
-{
-    float fRelease = 0.0f;
-    char sampleFilePath[256];
-    ResizeHandle fResizeHandle;
 
-public:
-    ImGuiPluginUI();
-
-    void setDroppedFilePath(const char* path)
-    {
-        strcpy(sampleFilePath, path);
-    }
-
-protected:
-    void parameterChanged(uint32_t index, float value) override
-    {
-        fRelease = value;
-        repaint();
-    }
-
-    void onImGuiDisplay() override;
-
-    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImGuiPluginUI)
-};
-
-// NOTE: Old MyFileDropSubclass and HookAllChildWindows functions have been removed.
-// They are no longer needed because OLE RegisterDragDrop does all the work!
-
-// --------------------------------------------------------------------------------------------------------------------
 ImGuiPluginUI::ImGuiPluginUI()
     : UI(),
     fResizeHandle(this)
@@ -120,6 +40,17 @@ ImGuiPluginUI::ImGuiPluginUI()
         // 4. Force the operating system to map our interceptor onto the plugin view window
         RegisterDragDrop(pluginHwnd, dropTarget);
     }
+}
+
+void ImGuiPluginUI::setDroppedFilePath(const char* path)
+{
+    strcpy(sampleFilePath, path);
+}
+
+void ImGuiPluginUI::parameterChanged(uint32_t index, float value)
+{
+    fRelease = value;
+    repaint();
 }
 
 void ImGuiPluginUI::onImGuiDisplay()
@@ -156,34 +87,17 @@ void ImGuiPluginUI::onImGuiDisplay()
     ImGui::End();
 }
 
-STDMETHODIMP MyOleDropTarget::Drop(IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect)
-{
-    FORMATETC fmt = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
-    STGMEDIUM stg;
 
-    // Extract the file block from the rich OLE Data Object
-    if (pDataObj->GetData(&fmt, &stg) == S_OK)
-    {
-        HDROP hDrop = (HDROP)GlobalLock(stg.hGlobal);
-        char droppedPath[MAX_PATH];
 
-        if (DragQueryFileA(hDrop, 0, droppedPath, MAX_PATH))
-        {
-            // Send the path straight to your ImGui variable!
-            m_ui->setDroppedFilePath(droppedPath);
-        }
-
-        GlobalUnlock(stg.hGlobal);
-        ReleaseStgMedium(&stg);
-    }
-
-    *pdwEffect = DROPEFFECT_COPY;
-    return S_OK;
-}
 
 UI* createUI()
 {
     return new ImGuiPluginUI();
 }
+
+// --------------------------------------------------------------------------------------------------------------------
+
+
+
 
 END_NAMESPACE_DISTRHO
