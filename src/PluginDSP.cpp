@@ -6,7 +6,6 @@
  */
 
 #include "DistrhoPlugin.hpp"
-#include "extra/ValueSmoother.hpp"
 #include "Parameters.hpp"
 
 START_NAMESPACE_DISTRHO
@@ -19,7 +18,6 @@ class ImGuiPluginDSP : public Plugin
 
     float fRelease = 0.0f;
     char sampleFilePath[256];
-    ExponentialValueSmoother fSmoothGain;
 
 public:
    /**
@@ -29,9 +27,7 @@ public:
     ImGuiPluginDSP()
         : Plugin(kParamCount, 0, 0) // parameters, programs, states
     {
-        fSmoothGain.setSampleRate(getSampleRate());
-        fSmoothGain.setTargetValue(0.f);
-        fSmoothGain.setTimeConstant(0.020f); // 20ms
+
         strcpy(sampleFilePath, "Drop Audio File Here");
     }
 
@@ -122,11 +118,9 @@ protected:
     */
     float getParameterValue(uint32_t index) const override
     {
-        DISTRHO_SAFE_ASSERT_RETURN(index == 0, 0.f);
         if(index==kParamRelease){
             return fRelease;
         }
-        return -999.f;
     }
 
    /**
@@ -137,10 +131,7 @@ protected:
     */
     void setParameterValue(uint32_t index, float value) override
     {
-        DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
-
         fRelease = value;
-        fSmoothGain.setTargetValue(std::clamp(value, 0.f, 4000.f));
     }
 
     // ----------------------------------------------------------------------------------------------------------------
@@ -151,7 +142,6 @@ protected:
     */
     void activate() override
     {
-        fSmoothGain.clearToTargetValue();
     }
 
     String getState(const char* key) const override {
@@ -169,37 +159,18 @@ protected:
     */
     void run(const float** inputs, float** outputs, uint32_t frames, const MidiEvent* midiEvents, uint32_t midiEventCount) override
     {
-        // // get the left and right audio inputs
-        // const float* const inpL = inputs[0];
-        // const float* const inpR = inputs[1];
 
-        // get the left and right audio outputs
         float* const outL = outputs[0];
         float* const outR = outputs[1];
 
         // apply gain against all samples
         for (uint32_t i=0; i < frames; ++i)
         {
-            const float gain = fSmoothGain.next();
-            outL[i] = 1 * gain;
-            outR[i] = 1 * gain;
+            outL[i] = 1;
+            outR[i] = 1;
         }
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Callbacks (optional)
-
-   /**
-      Optional callback to inform the plugin about a sample rate change.@n
-      This function will only be called when the plugin is deactivated.
-      @see getSampleRate()
-    */
-    void sampleRateChanged(double newSampleRate) override
-    {
-        fSmoothGain.setSampleRate(newSampleRate);
-    }
-
-    // ----------------------------------------------------------------------------------------------------------------
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImGuiPluginDSP)
 };

@@ -28,7 +28,7 @@
    The plugin URI when exporting in LV2 format.
    @note This macro is required.
  */
-#define DISTRHO_PLUGIN_URI "urn:distrho:examples:imguisimplegain"
+#define DISTRHO_PLUGIN_URI "B:A:K:D"
 
 /**
    Whether the plugin has a custom %UI.
