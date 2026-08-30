@@ -7,6 +7,7 @@
 
 #include "DistrhoPlugin.hpp"
 #include "Parameters.hpp"
+#include "external/AudioFile.h"
 
 START_NAMESPACE_DISTRHO
 
@@ -18,6 +19,9 @@ class ImGuiPluginDSP : public Plugin
 
     float fRelease = 0.0f;
     char sampleFilePath[256];
+    std::vector<float> sampleLeft, sampleRight;
+    bool loaded = false;
+    AudioFile<float> audioFile;
 
 public:
    /**
@@ -153,21 +157,83 @@ protected:
         strcpy(sampleFilePath, value);
     }
 
+    void loadWavFile ( const char *value )
+    {
+        audioFile.load ( value );
+        int numChannels = audioFile.getNumChannels();
+        sampleLeft = audioFile.samples[0];
+        if ( numChannels>=2 )
+        {
+            sampleRight = audioFile.samples[1];
+
+        }
+        else
+        {
+            sampleRight = audioFile.samples[1];
+        }
+        loaded=true;
+    }
+
    /**
       Run/process function for plugins without MIDI input.
       @note Some parameters might be null if there are no audio inputs or outputs.
     */
-    void run(const float** inputs, float** outputs, uint32_t frames, const MidiEvent* midiEvents, uint32_t midiEventCount) override
+
+
+    void run ( const float **inputs, float **outputs, uint32_t frames,
+             const MidiEvent *midiEvents, // MIDI pointer
+             uint32_t midiEventCount      // Number of MIDI events in block
+             ) override
     {
 
-        float* const outL = outputs[0];
-        float* const outR = outputs[1];
+        float *const out = outputs[0];
 
-        for (uint32_t i=0; i < frames; ++i)
+
+        int curEventIndex =0;
+        for ( uint32_t i = 0; i < frames; i++ )
         {
-            outL[i] = 1;
-            outR[i] = 1;
+            while ( curEventIndex < midiEventCount && i == midiEvents[curEventIndex].frame )
+            {
+
+                int status = midiEvents[curEventIndex].data[0]; // midi status
+                //  int channel = status & 0x0F ; // get midi channel
+                int midi_message = status & 0xF0;
+                int midi_data1 = midiEvents[curEventIndex].data[1];
+                int midi_data2 = midiEvents[curEventIndex].data[2];
+                //midiNote=midi_data1;
+
+                switch ( midi_message )
+                {
+                case 0x80: // note_off
+                    //noteOff();
+                    break;
+                case 0x90: // note_on
+                    //noteOn();
+                    //velocity=midi_data2;
+                    break;
+                default:
+                    break;
+                }
+                curEventIndex++;
+
+            }
+            out[i]=0.0f;
+            // if ( ready )
+            // {
+            //     float positionIncrement=pow ( 2, ( float ) ( midiNote-60 ) /12 );
+
+            //     floatPosition=fmod ( floatPosition,minlength );
+            //     float mult= ( ( float ) velocity ) /127.0f;
+            //     out[i]=waveform[ ( int ) floatPosition]*Gain*envelope() *mult;
+
+            //     floatPosition+=positionIncrement;
+            //     envelopePosition+=1;
+
+            // }
+
+
         }
+
     }
 
 
