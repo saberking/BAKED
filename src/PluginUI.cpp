@@ -31,13 +31,13 @@ public:
         if (isResizable())
             fResizeHandle.hide();
 
-        // 3. Create our custom OLE interceptor instance
+        // Create our custom OLE interceptor instance
         new MyOleDropTarget(this);
     }
 
     void setDroppedFilePath(const char* path) override {
         strcpy(sampleFilePath, path);
-        setState("filepath", sampleFilePath);
+        setState("sampleFilePath", sampleFilePath);
     }
 
     Window& getWindow() const override {

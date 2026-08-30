@@ -11,7 +11,6 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <ole2.h>
-#include "DistrhoUI.hpp"
 
 START_NAMESPACE_DISTRHO
 

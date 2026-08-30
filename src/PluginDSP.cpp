@@ -163,7 +163,6 @@ protected:
         float* const outL = outputs[0];
         float* const outR = outputs[1];
 
-        // apply gain against all samples
         for (uint32_t i=0; i < frames; ++i)
         {
             outL[i] = 1;
