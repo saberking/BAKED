@@ -9,6 +9,8 @@
 #include "ResizeHandle.hpp"
 #include "Parameters.hpp"
 #include "DragAndDrop.hpp"
+#include "WinConsoleOutput.hpp"
+
 
 START_NAMESPACE_DISTRHO
 
@@ -26,10 +28,10 @@ public:
         const double scaleFactor = getScaleFactor();
         setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
 
-        strcpy(sampleFilePath, "Drop Audio File Here");
 
         if (isResizable())
             fResizeHandle.hide();
+        strcpy(sampleFilePath, "Drop Audio File Here");
 
         // Create our custom OLE interceptor instance
         new MyOleDropTarget(this);
@@ -38,6 +40,7 @@ public:
     void setDroppedFilePath(const char* path) override {
         strcpy(sampleFilePath, path);
         setState("sampleFilePath", sampleFilePath);
+
     }
 
     Window& getWindow() const override {

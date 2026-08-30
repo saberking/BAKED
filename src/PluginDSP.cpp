@@ -8,6 +8,7 @@
 #include "DistrhoPlugin.hpp"
 #include "Parameters.hpp"
 #include "external/AudioFile.h"
+#include "WinConsoleOutput.hpp"
 
 
 START_NAMESPACE_DISTRHO
@@ -33,11 +34,16 @@ public:
     ImGuiPluginDSP()
         : Plugin(kParamCount, 0, 0) // parameters, programs, states
     {
+        InitConsoleOutput();
+
         strcpy(sampleFilePath, "Drop Audio File Here");
         for(int i=0;i<MAX_POLY;i++){
             playhead[i]=-1;//not playing
             releasePoint[i]=-1;//not released
         }
+    }
+    ~ImGuiPluginDSP(){
+        FreeConsole();
     }
 
 protected:
@@ -159,6 +165,7 @@ protected:
     }
 
     void setState(const char* key, const char* value) override {
+        std::cout<<value<<"\n\n";
         loadWavFile(value);
     }
 
@@ -170,6 +177,9 @@ protected:
 
     void loadWavFile ( const char *value )
     {
+        if(strcmp(sampleFilePath, value)==0){
+            return;
+        }
         strcpy(sampleFilePath, value);
         audioFile.load ( value );
         int numChannels = audioFile.getNumChannels();

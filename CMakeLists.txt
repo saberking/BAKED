@@ -43,6 +43,7 @@ target_sources(Baked
     src/Parameters.hpp
 
     src/DragAndDrop.hpp
+    src/WinConsoleOutput.hpp
 )
 
 target_include_directories(${NAME} PUBLIC src)
