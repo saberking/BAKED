@@ -9,19 +9,21 @@
 #include "Parameters.hpp"
 #include "external/AudioFile.h"
 
-START_NAMESPACE_DISTRHO
 
+START_NAMESPACE_DISTRHO
+#define SAMPLE_RATE 48000
+#define MAX_POLY 128
 
 // --------------------------------------------------------------------------------------------------------------------
 
 class ImGuiPluginDSP : public Plugin
 {
-
     float fRelease = 0.0f;
     char sampleFilePath[256];
     std::vector<float> sampleLeft, sampleRight;
     bool loaded = false;
     AudioFile<float> audioFile;
+    long playhead[MAX_POLY], releasePoint[MAX_POLY], midiNote[MAX_POLY],velocity[MAX_POLY];
 
 public:
    /**
@@ -31,8 +33,11 @@ public:
     ImGuiPluginDSP()
         : Plugin(kParamCount, 0, 0) // parameters, programs, states
     {
-
         strcpy(sampleFilePath, "Drop Audio File Here");
+        for(int i=0;i<MAX_POLY;i++){
+            playhead[i]=-1;//not playing
+            releasePoint[i]=-1;//not released
+        }
     }
 
 protected:
@@ -154,13 +159,21 @@ protected:
     }
 
     void setState(const char* key, const char* value) override {
-        strcpy(sampleFilePath, value);
+        loadWavFile(value);
+    }
+
+    void resetSampler(){
+        for(int i=0;i<MAX_POLY;i++){
+            playhead[i]=releasePoint[i]=-1;
+        }
     }
 
     void loadWavFile ( const char *value )
     {
+        strcpy(sampleFilePath, value);
         audioFile.load ( value );
         int numChannels = audioFile.getNumChannels();
+        std::cout<<numChannels;
         sampleLeft = audioFile.samples[0];
         if ( numChannels>=2 )
         {
@@ -169,16 +182,40 @@ protected:
         }
         else
         {
-            sampleRight = audioFile.samples[1];
+            sampleRight = audioFile.samples[0];
         }
         loaded=true;
+        resetSampler();
     }
 
-   /**
-      Run/process function for plugins without MIDI input.
-      @note Some parameters might be null if there are no audio inputs or outputs.
-    */
+    void noteOn(int _midiNote, int _velocity){
+        for(int i=0;i<MAX_POLY;i++){
+            if(playhead[i]==-1){
+                playhead[i]=0;//start playing
+                midiNote[i]=_midiNote;
+                velocity[i]=_velocity;
+                return;
+            }
+        }
+    }
 
+    void noteOff(int _midiNote){
+        for(int i=0;i<MAX_POLY;i++){
+            if(playhead[i]!=-1&&midiNote[i]==_midiNote){
+                releasePoint[i]=playhead[i];
+            }
+        }
+    }
+
+    float envelope(int voiceIndex){
+        if(releasePoint[voiceIndex]==-1){
+            return 1.f;
+        }else if(fRelease==0){
+            return -0.01f;
+        }else{
+            return 1 - (playhead[voiceIndex]-releasePoint[voiceIndex])/(fRelease*SAMPLE_RATE/1000);
+        }
+    }
 
     void run ( const float **inputs, float **outputs, uint32_t frames,
              const MidiEvent *midiEvents, // MIDI pointer
@@ -186,7 +223,9 @@ protected:
              ) override
     {
 
-        float *const out = outputs[0];
+        float *const outL = outputs[0];
+        float *const outR = outputs[1];
+
 
 
         int curEventIndex =0;
@@ -196,7 +235,6 @@ protected:
             {
 
                 int status = midiEvents[curEventIndex].data[0]; // midi status
-                //  int channel = status & 0x0F ; // get midi channel
                 int midi_message = status & 0xF0;
                 int midi_data1 = midiEvents[curEventIndex].data[1];
                 int midi_data2 = midiEvents[curEventIndex].data[2];
@@ -205,11 +243,10 @@ protected:
                 switch ( midi_message )
                 {
                 case 0x80: // note_off
-                    //noteOff();
+                    noteOff(midi_data1);
                     break;
                 case 0x90: // note_on
-                    //noteOn();
-                    //velocity=midi_data2;
+                    noteOn(midi_data1, midi_data2);
                     break;
                 default:
                     break;
@@ -217,19 +254,23 @@ protected:
                 curEventIndex++;
 
             }
-            out[i]=0.0f;
-            // if ( ready )
-            // {
-            //     float positionIncrement=pow ( 2, ( float ) ( midiNote-60 ) /12 );
+            outL[i]=outR[i]=0.0f;
+            if ( loaded )
+            {
+                for(int j=0;j<MAX_POLY;j++){
+                    if(playhead[j]!=-1){
+                        if(envelope(j)<0||playhead[j]>=sampleLeft.size()){
+                            playhead[j]=-1;
+                            releasePoint[j]=-1;
+                        }else{
+                            outL[i]+=sampleLeft[playhead[j]]*envelope(j);
+                            outR[i]+=sampleRight[playhead[j]]*envelope(j);
+                            playhead[j]++;
+                        }
+                    }
+                }
 
-            //     floatPosition=fmod ( floatPosition,minlength );
-            //     float mult= ( ( float ) velocity ) /127.0f;
-            //     out[i]=waveform[ ( int ) floatPosition]*Gain*envelope() *mult;
-
-            //     floatPosition+=positionIncrement;
-            //     envelopePosition+=1;
-
-            // }
+            }
 
 
         }
