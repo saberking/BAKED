@@ -34,7 +34,9 @@ public:
     ImGuiPluginDSP()
         : Plugin(kParamCount, 0, 0) // parameters, programs, states
     {
-        initConsoleOutput();
+        if (!GetConsoleWindow()) {
+            initConsoleOutput();
+        }
 
         strcpy(sampleFilePath, "Drop Audio File Here");
         for(int i=0;i<MAX_POLY;i++){

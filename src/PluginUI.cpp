@@ -9,7 +9,6 @@
 #include "ResizeHandle.hpp"
 #include "Parameters.hpp"
 #include "DragAndDrop.hpp"
-#include "WinConsoleOutput.hpp"
 
 
 START_NAMESPACE_DISTRHO
@@ -32,12 +31,7 @@ public:
         if (isResizable())
             fResizeHandle.hide();
 
-        // Inside your UI Constructor:
-        // Verify if a console already exists; if not, allocate one
-        if (!GetConsoleWindow()) {
-            initConsoleOutput();
-        }
-        std::cout << "Console successfully hooked to bridged process!" << std::endl;
+
 
         strcpy(sampleFilePath, "Drop Audio File Here");
 
