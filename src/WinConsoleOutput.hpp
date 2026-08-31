@@ -4,7 +4,7 @@
 #define WINCONSOLEOUTPUT_HPP
 START_NAMESPACE_DISTRHO
 
-inline void InitConsoleOutput(){
+inline void initConsoleOutput(){
     AllocConsole();
     FILE* fDummy;
     freopen_s(&fDummy, "CONOUT$", "w", stdout);

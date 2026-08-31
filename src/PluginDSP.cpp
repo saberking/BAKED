@@ -34,7 +34,7 @@ public:
     ImGuiPluginDSP()
         : Plugin(kParamCount, 0, 0) // parameters, programs, states
     {
-        InitConsoleOutput();
+        initConsoleOutput();
 
         strcpy(sampleFilePath, "Drop Audio File Here");
         for(int i=0;i<MAX_POLY;i++){
@@ -166,6 +166,7 @@ protected:
 
     void setState(const char* key, const char* value) override {
         std::cout<<value<<"\n\n";
+        std::cout << std::flush;
         loadWavFile(value);
     }
 
