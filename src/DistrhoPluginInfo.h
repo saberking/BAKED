@@ -325,7 +325,7 @@
       - surround
       - ambisonic
 */
-#define DISTRHO_PLUGIN_CLAP_FEATURES "sampler", "stereo"
+#define DISTRHO_PLUGIN_CLAP_FEATURES "instrument", "sampler", "stereo"
 
 /**
    The plugin id when exporting in CLAP format, in reverse URI form.
