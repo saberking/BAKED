@@ -1,5 +1,7 @@
 #include <windows.h>
 #include <iostream>
+#include "src/DistrhoDefines.h"
+
 #ifndef WINCONSOLEOUTPUT_HPP
 #define WINCONSOLEOUTPUT_HPP
 START_NAMESPACE_DISTRHO

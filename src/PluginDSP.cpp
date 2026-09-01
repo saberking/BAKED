@@ -12,15 +12,20 @@
 
 
 START_NAMESPACE_DISTRHO
-#define SAMPLE_RATE 48000
+
 #define MAX_POLY 128
+#define MAX_FILE_PATH_LENGTH 256
 
 // --------------------------------------------------------------------------------------------------------------------
+class SamplePlaybackEngine
+{
+
+};
 
 class ImGuiPluginDSP : public Plugin
 {
     float fRelease = 0.0f;
-    char sampleFilePath[256];
+    char sampleFilePath[MAX_FILE_PATH_LENGTH];
     std::vector<float> sampleLeft, sampleRight;
     bool loaded = false;
     AudioFile<float> audioFile;
@@ -226,7 +231,7 @@ protected:
         }else if(fRelease==0){
             return -0.01f;
         }else{
-            return 1 - (playhead[voiceIndex]-releasePoint[voiceIndex])/(fRelease*SAMPLE_RATE/1000);
+            return 1 - (playhead[voiceIndex]-releasePoint[voiceIndex])/(fRelease*getSampleRate()/1000);
         }
     }
 

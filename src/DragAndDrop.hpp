@@ -1,6 +1,5 @@
 #ifndef DRAGANDDROP_HPP
 #define DRAGANDDROP_HPP
-
 #ifndef WINVER
 #define WINVER 0x0601
 #endif
@@ -8,6 +7,7 @@
 #define _WIN32_WINNT 0x0601
 #endif
 
+#include "src/DistrhoDefines.h"
 #include <windows.h>
 #include <shellapi.h>
 #include <ole2.h>
