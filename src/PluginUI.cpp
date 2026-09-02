@@ -9,12 +9,19 @@
 #include "ResizeHandle.hpp"
 #include "Parameters.hpp"
 #include "DragAndDrop.hpp"
+#include "Editor.hpp"
+#include "Defines.hpp"
+#include "AudioData.hpp"
+
 
 
 START_NAMESPACE_DISTRHO
 
+
 class ImGuiPluginUI : public UI, public FileDropReceiver
-{
+{    AudioFile<float> audioFile;
+    bool sampleLoaded = false;
+
     float fRelease = 0.0f;
     char sampleFilePath[256];
     ResizeHandle fResizeHandle;
@@ -35,14 +42,16 @@ public:
 
         strcpy(sampleFilePath, "Drop Audio File Here");
 
+        tempAudioData=new AudioData();
+        dspAudioData=new AudioData();
+
         // Create our custom OLE interceptor instance
         new MyOleDropTarget(this);
     }
 
     void setDroppedFilePath(const char* path) override {
         strcpy(sampleFilePath, path);
-        setState("sampleFilePath", sampleFilePath);
-
+        loadWavFile(path, sampleData);
     }
 
     Window& getWindow() const override {

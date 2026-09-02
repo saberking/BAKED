@@ -44,6 +44,11 @@ target_sources(Baked
 
     src/DragAndDrop.hpp
     src/WinConsoleOutput.hpp
+    src/Editor.hpp
+    src/Defines.hpp
+    src/AudioData.hpp
+    src/SamplerEngine.hpp
+    src/SamplerDefines.hpp
 )
 
 target_include_directories(${NAME} PUBLIC src)

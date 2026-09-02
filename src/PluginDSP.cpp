@@ -7,29 +7,26 @@
 
 #include "DistrhoPlugin.hpp"
 #include "Parameters.hpp"
-#include "external/AudioFile.h"
 #include "WinConsoleOutput.hpp"
+#include "Defines.hpp"
+#include "AudioData.hpp"
 
 
 START_NAMESPACE_DISTRHO
 
-#define MAX_POLY 128
-#define MAX_FILE_PATH_LENGTH 256
+
 
 // --------------------------------------------------------------------------------------------------------------------
-class SamplePlaybackEngine
-{
 
-};
+
 
 class ImGuiPluginDSP : public Plugin
 {
     float fRelease = 0.0f;
-    char sampleFilePath[MAX_FILE_PATH_LENGTH];
-    std::vector<float> sampleLeft, sampleRight;
-    bool loaded = false;
-    AudioFile<float> audioFile;
-    long playhead[MAX_POLY], releasePoint[MAX_POLY], midiNote[MAX_POLY],velocity[MAX_POLY];
+    std::vector<float> sampleData[2];
+    bool isSampleLoaded = false;
+    SamplePlaybackEngine *engine;
+    AudioData *sample= NULL;
 
 public:
    /**
@@ -45,8 +42,7 @@ public:
 
         strcpy(sampleFilePath, "Drop Audio File Here");
         for(int i=0;i<MAX_POLY;i++){
-            playhead[i]=-1;//not playing
-            releasePoint[i]=-1;//not released
+            engine[i]=new SamplePlaybackEngine();
         }
     }
     ~ImGuiPluginDSP(){
@@ -171,69 +167,20 @@ protected:
         return (String) sampleFilePath;
     }
 
-    void setState(const char* key, const char* value) override {
-        std::cout<<value<<"\n\n";
-        std::cout << std::flush;
-        loadWavFile(value);
-    }
-
     void resetSampler(){
         for(int i=0;i<MAX_POLY;i++){
             playhead[i]=releasePoint[i]=-1;
         }
     }
 
-    void loadWavFile ( const char *value )
-    {
-        if(strcmp(sampleFilePath, value)==0){
-            return;
-        }
-        strcpy(sampleFilePath, value);
-        audioFile.load ( value );
-        int numChannels = audioFile.getNumChannels();
-        std::cout<<numChannels;
-        sampleLeft = audioFile.samples[0];
-        if ( numChannels>=2 )
-        {
-            sampleRight = audioFile.samples[1];
-
-        }
-        else
-        {
-            sampleRight = audioFile.samples[0];
-        }
-        loaded=true;
+    void sampleLoaded(){
+        isSampleLoaded=true;
         resetSampler();
     }
 
-    void noteOn(int _midiNote, int _velocity){
-        for(int i=0;i<MAX_POLY;i++){
-            if(playhead[i]==-1){
-                playhead[i]=0;//start playing
-                midiNote[i]=_midiNote;
-                velocity[i]=_velocity;
-                return;
-            }
-        }
-    }
 
-    void noteOff(int _midiNote){
-        for(int i=0;i<MAX_POLY;i++){
-            if(playhead[i]!=-1&&midiNote[i]==_midiNote){
-                releasePoint[i]=playhead[i];
-            }
-        }
-    }
 
-    float envelope(int voiceIndex){
-        if(releasePoint[voiceIndex]==-1){
-            return 1.f;
-        }else if(fRelease==0){
-            return -0.01f;
-        }else{
-            return 1 - (playhead[voiceIndex]-releasePoint[voiceIndex])/(fRelease*getSampleRate()/1000);
-        }
-    }
+
 
     void run ( const float **inputs, float **outputs, uint32_t frames,
              const MidiEvent *midiEvents, // MIDI pointer
@@ -273,16 +220,16 @@ protected:
 
             }
             outL[i]=outR[i]=0.0f;
-            if ( loaded )
+            if ( sampleLoaded )
             {
                 for(int j=0;j<MAX_POLY;j++){
                     if(playhead[j]!=-1){
-                        if(envelope(j)<0||playhead[j]>=sampleLeft.size()){
+                        if(envelope(j)<0||playhead[j]>=sample[0].size()){
                             playhead[j]=-1;
                             releasePoint[j]=-1;
                         }else{
-                            outL[i]+=sampleLeft[playhead[j]]*envelope(j);
-                            outR[i]+=sampleRight[playhead[j]]*envelope(j);
+                            outL[i]+=sample[0][playhead[j]]*envelope(j);
+                            outR[i]+=sample[1][playhead[j]]*envelope(j);
                             playhead[j]++;
                         }
                     }
