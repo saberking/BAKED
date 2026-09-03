@@ -16,24 +16,33 @@ class SampleEditor
 public:
     AudioData *data;
     char name[MAX_FILE_PATH_LENGTH];
+    ImPlotSpec spec;
+
 
     SampleEditor(const char *_name, AudioData *_data=NULL) {
         strcpy(name, _name);
         data=_data;
+        spec.Flags = ImPlotFlags_CanvasOnly;
     }
 
     // A custom callback function that ImPlot uses to grab values safely
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
         auto* vec_ptr = static_cast<AudioData*>(data_ptr);
-
+        float y_val=0;
         // 2. Safely read using the arrow operator -> directly into the vector array index
         // This tells the compiler: "Stay at this vector address, look 'idx' floats deep inside it"
-        float y_val = vec_ptr->sampleData[0][idx].load(std::memory_order_relaxed);
+        if(idx>=0&&idx<vec_ptr->length)
+        {
+            y_val = vec_ptr->sampleData[0][idx].load(std::memory_order_relaxed);
+            return ImPlotPoint(idx, y_val);
+
+        }else{
+            return ImPlotPoint(NAN, NAN);
+        }
 
         // Alternative cleaner syntax that does the exact same safe lookup:
         // float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
 
-        return ImPlotPoint(idx, y_val);
     }
 
     void render(){
@@ -41,7 +50,8 @@ public:
         if(data)
         {
             if (ImPlot::BeginPlot("My Plot")) {
-                ImPlot::PlotLineG("My Line", AtomicVectorGetter, data, 200);
+
+                ImPlot::PlotScatterG("My Line", AtomicVectorGetter, data, data->length-1, spec);
                 ImPlot::EndPlot();
 
             }
