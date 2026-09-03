@@ -10,13 +10,10 @@
 #include "Parameters.hpp"
 #include "DragAndDrop.hpp"
 #include "Editor.hpp"
-#include "Defines.hpp"
-#include "AudioData.hpp"
-
+#include "PluginDSP.hpp"
 
 
 START_NAMESPACE_DISTRHO
-
 
 class ImGuiPluginUI : public UI, public FileDropReceiver
 {
@@ -43,7 +40,8 @@ public:
     }
 
     void setDroppedFilePath(const char* path) override {
-        getPluginInstancePointer()->loadWavFile(path);
+        auto* plugin = static_cast<ImGuiPluginDSP*>(getPluginInstancePointer());
+        plugin->sample->loadWavFile(path);
         strcpy(sampleFilePath, path);
     }
 

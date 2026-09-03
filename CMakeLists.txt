@@ -35,7 +35,8 @@ dpf_add_plugin(${NAME}
       src/PluginDSP.cpp
   FILES_UI
       src/PluginUI.cpp
-
+      src/external/implot.cpp
+      src/external/implot_items.cpp
       dpf-widgets/opengl/DearImGui.cpp)
 
 target_sources(Baked
@@ -45,9 +46,10 @@ target_sources(Baked
     src/DragAndDrop.hpp
     src/WinConsoleOutput.hpp
     src/Editor.hpp
-    src/Defines.hpp
+
     src/AudioData.hpp
     src/SamplerEngine.hpp
+    src/PluginDSP.hpp
 
 )
 

@@ -1,8 +1,0 @@
-#ifndef DEFINES_HPP
-#define DEFINES_HPP
-#include "src/DistrhoDefines.h"
-START_NAMESPACE_DISTRHO
-#define MAX_POLY 128
-#define MAX_FILE_PATH_LENGTH 256
-END_NAMESPACE_DISTRHO
-#endif // DEFINES_HPP

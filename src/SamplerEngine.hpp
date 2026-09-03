@@ -5,18 +5,20 @@
 
 START_NAMESPACE_DISTRHO
 
+#define MAX_POLY 128
 
 
 // --------------------------------------------------------------------------------------------------------------------
 class SamplePlaybackEngineMonophonic
 {
+public:
     long playhead=0, releaseStage=0;
     int midiNote, velocity;
     bool playing=false, released=false;
-    float getReleaseValue(float releaseCurve[MAX_SAMPLE_LENGTH]){
-        return releaseCurve[(long)releaseStage*MAX_SAMPLE_LENGTH];
+    float getReleaseValue(AudioData *releaseCurve){
+        return releaseCurve->sampleData[0][(long)releaseStage*MAX_SAMPLE_LENGTH].load(std::memory_order_relaxed);
     }
-    void noteOn(int _midiNote, int velocity){
+    void noteOn(int _midiNote, int _velocity){
         midiNote=_midiNote;
         velocity=_velocity;
         playhead=0;
@@ -34,14 +36,15 @@ class SamplePlaybackEngineMonophonic
             outputs[0]=outputs[1]=0;
             return;
         }
-        output[0]=sample->sampleData[0][playhead].load(std::memory_order_relaxed);
-        output[1]=sample->sampleData[1][playhead].load(std::memory_order_relaxed);
+        outputs[0]=sample->sampleData[0][playhead].load(std::memory_order_relaxed);
+        outputs[1]=sample->sampleData[1][playhead].load(std::memory_order_relaxed);
+        //std::cout<<"foo"<<"\n\n"<<outputs<<"\n\n";
         if(++playhead>=sample->length){
             playing=false;
         }
         if(released){
             float releaseValue=getReleaseValue(releaseCurve);
-            output[0]*=releaseValue;output[1]*=releaseValue;
+            outputs[0]*=releaseValue;outputs[1]*=releaseValue;
             releaseStage+=1/(releaseTime*MAX_SAMPLE_LENGTH);
             if(releaseStage>=1){
                 playing=false;
@@ -53,6 +56,7 @@ class SamplePlaybackEngineMonophonic
 
 class SamplePlaybackEnginePolyphonic
 {
+public:
     SamplePlaybackEngineMonophonic *engines[MAX_POLY];
     SamplePlaybackEnginePolyphonic(){
         for(int i=0;i<MAX_POLY;i++){
@@ -76,16 +80,14 @@ class SamplePlaybackEnginePolyphonic
         }
     }
 
-    float run(AudioData *sample, float releaseTime, AudioData *releaseCurve, float outputs[2]){
-        float output=0;
+    void run(AudioData *sample, float releaseTime, AudioData *releaseCurve, float outputs[2]){
+        outputs[0]=outputs[1]=0;
+        float tempOutputs[2];
         for(int i=0;i<MAX_POLY;i++)
         {
-            if(engines[i]->playing)
-            {
-                output+=engines[i]->run(sampleData,releaseTime,releaseCurve, outputs);
-            }
+            engines[i]->run(sample,releaseTime,releaseCurve, tempOutputs);
+            outputs[0]+=tempOutputs[0];outputs[1]+=tempOutputs[1];
         }
-        return output;
     }
 
 
