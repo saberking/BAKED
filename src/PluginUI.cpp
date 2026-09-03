@@ -19,12 +19,10 @@ START_NAMESPACE_DISTRHO
 
 
 class ImGuiPluginUI : public UI, public FileDropReceiver
-{    AudioFile<float> audioFile;
-    bool sampleLoaded = false;
-
+{
     float fRelease = 0.0f;
-    char sampleFilePath[256];
     ResizeHandle fResizeHandle;
+    char sampleFilePath[MAX_FILE_PATH_LENGTH];
 
 public:
     ImGuiPluginUI()
@@ -39,19 +37,14 @@ public:
             fResizeHandle.hide();
 
 
-
-        strcpy(sampleFilePath, "Drop Audio File Here");
-
-        tempAudioData=new AudioData();
-        dspAudioData=new AudioData();
-
+        strcpy(sampleFilePath, "Drop sample here...");
         // Create our custom OLE interceptor instance
         new MyOleDropTarget(this);
     }
 
     void setDroppedFilePath(const char* path) override {
+        getPluginInstancePointer()->loadWavFile(path);
         strcpy(sampleFilePath, path);
-        loadWavFile(path, sampleData);
     }
 
     Window& getWindow() const override {

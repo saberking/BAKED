@@ -10,6 +10,7 @@
 #include "WinConsoleOutput.hpp"
 #include "Defines.hpp"
 #include "AudioData.hpp"
+#include "SamplerEngine.hpp"
 
 
 START_NAMESPACE_DISTRHO
@@ -23,10 +24,9 @@ START_NAMESPACE_DISTRHO
 class ImGuiPluginDSP : public Plugin
 {
     float fRelease = 0.0f;
-    std::vector<float> sampleData[2];
-    bool isSampleLoaded = false;
-    SamplePlaybackEngine *engine;
-    AudioData *sample= NULL;
+    SamplePlaybackEnginePolyphonic *engine;
+    AudioData *sample;
+    AudioData *releaseCurve;
 
 public:
    /**
@@ -41,9 +41,10 @@ public:
         }
 
         strcpy(sampleFilePath, "Drop Audio File Here");
-        for(int i=0;i<MAX_POLY;i++){
-            engine[i]=new SamplePlaybackEngine();
-        }
+        engine=new SamplePlaybackEnginePolyphonic();
+        sample= new AudioData();
+        releaseCurve=new AudioData();
+
     }
     ~ImGuiPluginDSP(){
         FreeConsole();
@@ -164,20 +165,15 @@ protected:
 
     String getState(const char* key) const override {
 
-        return (String) sampleFilePath;
+        return (String) "";
     }
 
-    void resetSampler(){
-        for(int i=0;i<MAX_POLY;i++){
-            playhead[i]=releasePoint[i]=-1;
+    void setState(const char *key, const char * value){
+        if(strcmp(key, "loadWavFile")==0)
+        {
+            sample->loadWavFile(value);
         }
     }
-
-    void sampleLoaded(){
-        isSampleLoaded=true;
-        resetSampler();
-    }
-
 
 
 
@@ -188,8 +184,7 @@ protected:
              ) override
     {
 
-        float *const outL = outputs[0];
-        float *const outR = outputs[1];
+
 
 
 
@@ -208,10 +203,10 @@ protected:
                 switch ( midi_message )
                 {
                 case 0x80: // note_off
-                    noteOff(midi_data1);
+                    engine->noteOff(midi_data1);
                     break;
                 case 0x90: // note_on
-                    noteOn(midi_data1, midi_data2);
+                    engine->noteOn(midi_data1, midi_data2);
                     break;
                 default:
                     break;
@@ -219,23 +214,10 @@ protected:
                 curEventIndex++;
 
             }
-            outL[i]=outR[i]=0.0f;
-            if ( sampleLoaded )
-            {
-                for(int j=0;j<MAX_POLY;j++){
-                    if(playhead[j]!=-1){
-                        if(envelope(j)<0||playhead[j]>=sample[0].size()){
-                            playhead[j]=-1;
-                            releasePoint[j]=-1;
-                        }else{
-                            outL[i]+=sample[0][playhead[j]]*envelope(j);
-                            outR[i]+=sample[1][playhead[j]]*envelope(j);
-                            playhead[j]++;
-                        }
-                    }
-                }
+            float tempOut[2];
+            engine->run(sample->sampleData, releaseTime, releaseCurve, outputs);
+            outputs[0][i]=tempOut[0];outputs[1][i]=tempOut[1];
 
-            }
 
 
         }

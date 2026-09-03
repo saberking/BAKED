@@ -48,7 +48,7 @@ target_sources(Baked
     src/Defines.hpp
     src/AudioData.hpp
     src/SamplerEngine.hpp
-    src/SamplerDefines.hpp
+
 )
 
 target_include_directories(${NAME} PUBLIC src)

@@ -19,7 +19,7 @@ class SampleEditor : Editor
     AudioData *data;
     float xAxis[MAX_SAMPLE_LENGTH];
     SampleEditor(char *_name, AudioData *_data=NULL) : Editor(_name ){
-        data=new AudioData(_data);
+        data=_data;
     }
 
     render(){
@@ -40,4 +40,6 @@ class SampleEditor : Editor
 class EnvelopeEditor : Editor
 {
 };
+
+END_NAMESPACE_DISTRHO
 #endif // EDITOR_HPP

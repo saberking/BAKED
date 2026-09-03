@@ -1,7 +1,7 @@
 #ifndef SAMPLERENGINE_HPP
 #define SAMPLERENGINE_HPP
 #include "src/DistrhoDefines.h"
-#include "SamplerDefines.hpp"
+#include "AudioData.hpp"
 
 START_NAMESPACE_DISTRHO
 
@@ -13,8 +13,8 @@ class SamplePlaybackEngineMonophonic
     long playhead=0, releaseStage=0;
     int midiNote, velocity;
     bool playing=false, released=false;
-    float getReleaseValue(float releaseCurve[MAX_SAMPLE_LENGTH], long sampleLength){
-        return releaseCurve[(long)releaseStage*sampleLength];
+    float getReleaseValue(float releaseCurve[MAX_SAMPLE_LENGTH]){
+        return releaseCurve[(long)releaseStage*MAX_SAMPLE_LENGTH];
     }
     void noteOn(int _midiNote, int velocity){
         midiNote=_midiNote;
@@ -28,21 +28,25 @@ class SamplePlaybackEngineMonophonic
         releaseStage=0;
     }
 
-    float run(std::vector<float> sampleData, float releaseTime, float releaseCurve[MAX_SAMPLE_LENGTH]){
+    void run(AudioData *sample, float releaseTime, AudioData *releaseCurve, float outputs[2]){
 
-        if(!playing) return 0;
-        float output=sampleData[playhead];
-        if(++playhead>=sizeof(sampleData)){
+        if(!playing){
+            outputs[0]=outputs[1]=0;
+            return;
+        }
+        output[0]=sample->sampleData[0][playhead].load(std::memory_order_relaxed);
+        output[1]=sample->sampleData[1][playhead].load(std::memory_order_relaxed);
+        if(++playhead>=sample->length){
             playing=false;
         }
         if(released){
-            output*=getReleaseValue(releaseCurve, sizeof(sampleData));
-            releaseStage+=1/(releaseTime*sizeof(sampleData);
+            float releaseValue=getReleaseValue(releaseCurve);
+            output[0]*=releaseValue;output[1]*=releaseValue;
+            releaseStage+=1/(releaseTime*MAX_SAMPLE_LENGTH);
             if(releaseStage>=1){
                 playing=false;
             }
         }
-        return output;
 
     }
 };
@@ -72,13 +76,13 @@ class SamplePlaybackEnginePolyphonic
         }
     }
 
-    float run(std::vector<float> sampleData, float releaseTime, float releaseCurve[MAX_SAMPLE_LENGTH]){
+    float run(AudioData *sample, float releaseTime, AudioData *releaseCurve, float outputs[2]){
         float output=0;
         for(int i=0;i<MAX_POLY;i++)
         {
             if(engines[i]->playing)
             {
-                output+=engines[i]->run(sampleData,releaseTime,releaseCurve);
+                output+=engines[i]->run(sampleData,releaseTime,releaseCurve, outputs);
             }
         }
         return output;
