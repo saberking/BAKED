@@ -12,7 +12,7 @@ class AudioData
 public:
     unsigned int channels = 1;
     std::vector<std::atomic<float>> sampleData[2];
-    unsigned long length=0;
+    int length=0;
     AudioData(){
         sampleData[0] = std::vector<std::atomic<float>>(MAX_SAMPLE_LENGTH);
         sampleData[1] = std::vector<std::atomic<float>>(MAX_SAMPLE_LENGTH);
@@ -36,7 +36,6 @@ public:
             sampleData[1][i].store(audioFile.samples[channels>=2?1:0][i],std::memory_order_relaxed);
         }
         std::cout<<"length: "<<length<<"\n\n";
-
 
     }
     void makeMono(){

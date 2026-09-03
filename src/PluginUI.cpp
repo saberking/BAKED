@@ -20,6 +20,7 @@ class ImGuiPluginUI : public UI, public FileDropReceiver
     float fRelease = 0.0f;
     ResizeHandle fResizeHandle;
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
+    SampleEditor *editor;
 
 public:
     ImGuiPluginUI()
@@ -37,11 +38,18 @@ public:
         strcpy(sampleFilePath, "Drop sample here...");
         // Create our custom OLE interceptor instance
         new MyOleDropTarget(this);
+        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->sample);
+        ImPlot::CreateContext();
+
+    }
+
+    ImGuiPluginDSP* getPluginDPSPointer(){
+        auto* plugin = static_cast<ImGuiPluginDSP*>(getPluginInstancePointer());
+        return plugin;
     }
 
     void setDroppedFilePath(const char* path) override {
-        auto* plugin = static_cast<ImGuiPluginDSP*>(getPluginInstancePointer());
-        plugin->sample->loadWavFile(path);
+        getPluginDPSPointer()->sample->loadWavFile(path);
         strcpy(sampleFilePath, path);
     }
 
@@ -66,6 +74,13 @@ protected:
         if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize))
         {
             ImGui::Text("File Status: %s", sampleFilePath);
+            if (ImGui::CollapsingHeader("Sample Editor"))
+            {
+                ImGui::Indent();
+                editor->render();
+
+                ImGui::Unindent();
+            }
 
             ImGui::Separator();
             ImGui::Spacing();
@@ -84,6 +99,11 @@ protected:
             }
         }
         ImGui::End();
+
+    }
+
+    ~ImGuiPluginUI(){
+        ImPlot::DestroyContext();
     }
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImGuiPluginUI)
