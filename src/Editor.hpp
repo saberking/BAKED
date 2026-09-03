@@ -31,14 +31,9 @@ public:
         float y_val=0;
         // 2. Safely read using the arrow operator -> directly into the vector array index
         // This tells the compiler: "Stay at this vector address, look 'idx' floats deep inside it"
-        if(idx>=0&&idx<vec_ptr->length)
-        {
-            y_val = vec_ptr->sampleData[0][idx].load(std::memory_order_relaxed);
-            return ImPlotPoint(idx, y_val);
 
-        }else{
-            return ImPlotPoint(NAN, NAN);
-        }
+        y_val = vec_ptr->sampleData[0][idx].load(std::memory_order_relaxed);
+        return ImPlotPoint(idx, y_val);
 
         // Alternative cleaner syntax that does the exact same safe lookup:
         // float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
@@ -51,7 +46,7 @@ public:
         {
             if (ImPlot::BeginPlot("My Plot")) {
 
-                ImPlot::PlotScatterG("My Line", AtomicVectorGetter, data, data->length-1, spec);
+                ImPlot::PlotScatterG("My Line", AtomicVectorGetter, data, data->length, spec);
                 ImPlot::EndPlot();
 
             }
