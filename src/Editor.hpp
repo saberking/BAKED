@@ -45,7 +45,11 @@ public:
         if(data)
         {
             if (ImPlot::BeginPlot("My Plot")) {
+                ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
+                ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
 
+                // Allow the X-axis to scroll and zoom normally
+                ImPlot::SetupAxis(ImAxis_X1, "Samples", ImPlotAxisFlags_None);
                 ImPlot::PlotScatterG("My Line", AtomicVectorGetter, data, data->length, spec);
                 ImPlot::EndPlot();
 
