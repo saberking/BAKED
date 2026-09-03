@@ -107,12 +107,12 @@ protected:
         DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
 
         parameter.ranges.min = 0.f;
-        parameter.ranges.max = 4000.f;
-        parameter.ranges.def = 0.f;
+        parameter.ranges.max = 1.f;
+        parameter.ranges.def = 1.f;
         parameter.name = "Release";
         parameter.shortName = "Release";
         parameter.symbol = "release";
-        parameter.unit = "ms";
+        parameter.unit = "";
     }
 
     // ----------------------------------------------------------------------------------------------------------------

@@ -70,7 +70,7 @@ protected:
             ImGui::Separator();
             ImGui::Spacing();
 
-            if (ImGui::SliderFloat("Release", &fRelease, 0.f, 4000.f))
+            if (ImGui::SliderFloat("Release", &fRelease, 0.f, 1.f))
             {
                 if (ImGui::IsItemActivated())
                     editParameter(kParamRelease, true);
