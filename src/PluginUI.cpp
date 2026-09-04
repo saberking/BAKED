@@ -38,8 +38,10 @@ public:
         strcpy(sampleFilePath, "Drop sample here...");
         // Create our custom OLE interceptor instance
         new MyOleDropTarget(this);
-        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->sample);
-        ImPlot::CreateContext();
+        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->sample, getWindow().getApp(), getWindow());
+        if (editor) {
+            editor->show();  // Tells the OS to make the window visible
+        }
 
     }
 
@@ -74,13 +76,13 @@ protected:
         if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize))
         {
             ImGui::Text("File Status: %s", sampleFilePath);
-            if (ImGui::CollapsingHeader("Sample Editor"))
-            {
-                ImGui::Indent();
-                editor->render();
+            // if (ImGui::CollapsingHeader("Sample Editor"))
+            // {
+            //     ImGui::Indent();
+            //     editor->render();
 
-                ImGui::Unindent();
-            }
+            //     ImGui::Unindent();
+            // }
 
             ImGui::Separator();
             ImGui::Spacing();

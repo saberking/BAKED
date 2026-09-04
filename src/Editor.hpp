@@ -1,6 +1,8 @@
 #ifndef EDITOR_HPP
 #define EDITOR_HPP
 #include "src/DistrhoDefines.h"
+#include "DistrhoUI.hpp"
+
 #include "AudioData.hpp"
 #include "external/implot.h"
 #include "external/implot_internal.h"
@@ -10,8 +12,7 @@ START_NAMESPACE_DISTRHO
 #define MAX_FILE_PATH_LENGTH 256
 
 
-
-class SampleEditor
+class SampleEditor : public DGL::ImGuiStandaloneWindow
 {
 public:
     AudioData *data;
@@ -19,10 +20,12 @@ public:
     ImPlotSpec spec;
 
 
-    SampleEditor(const char *_name, AudioData *_data=NULL) {
+    SampleEditor(const char *_name, AudioData *_data, Application& app, Window& window): DGL::ImGuiStandaloneWindow(app, window) {
         strcpy(name, _name);
         data=_data;
         spec.Flags = ImPlotFlags_CanvasOnly;
+        ImPlot::CreateContext();
+        setResizable(true);
     }
 
     // A custom callback function that ImPlot uses to grab values safely
@@ -40,11 +43,14 @@ public:
 
     }
 
-    void render(){
 
-        if(data)
-        {
-            if (ImPlot::BeginPlot("My Plot")) {
+    void onImGuiDisplay() override{
+
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
+
+        if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
+            if (data&&ImPlot::BeginPlot("My Plot")) {
                 ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
                 ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
 
@@ -54,9 +60,11 @@ public:
                 ImPlot::EndPlot();
 
             }
-
         }
+
+        ImGui::End();
     }
+
 };
 
 
