@@ -6,6 +6,7 @@
 #include "AudioData.hpp"
 #include "external/implot.h"
 #include "external/implot_internal.h"
+#include "SamplerEngine.hpp"
 
 
 START_NAMESPACE_DISTRHO
@@ -16,16 +17,20 @@ class SampleEditor : public DGL::ImGuiStandaloneWindow
 {
 public:
     AudioData *data;
+    SamplePlaybackEnginePolyphonic *engine;
     char name[MAX_FILE_PATH_LENGTH];
     ImPlotSpec spec;
 
 
-    SampleEditor(const char *_name, AudioData *_data, Application& app, Window& window): DGL::ImGuiStandaloneWindow(app, window) {
+    SampleEditor(const char *_name, AudioData *_data, SamplePlaybackEnginePolyphonic *_engine, Window& window):
+        DGL::ImGuiStandaloneWindow(window.getApp(), window) {
         strcpy(name, _name);
         data=_data;
+        engine=_engine;
         spec.Flags = ImPlotFlags_CanvasOnly;
-        ImPlot::CreateContext();
         setResizable(true);
+        ImPlot::CreateContext();
+
     }
 
     // A custom callback function that ImPlot uses to grab values safely
@@ -49,6 +54,7 @@ public:
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
 
+
         if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
             if (data&&ImPlot::BeginPlot("My Plot")) {
                 ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
@@ -57,6 +63,15 @@ public:
                 // Allow the X-axis to scroll and zoom normally
                 ImPlot::SetupAxis(ImAxis_X1, "Samples", ImPlotAxisFlags_None);
                 ImPlot::PlotScatterG("My Line", AtomicVectorGetter, data, data->length, spec);
+                ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+                for(int i=0;i<MAX_POLY;i++){
+                    if(engine->engines[i]->playing){
+                        double playhead = engine->engines[i]->playhead; // Pass your actual playback position variable
+                        ImPlot::DragLineX(0, &playhead, ImVec4(0.5,0.5,0.5,0.5), 0.5f, ImPlotDragToolFlags_NoInputs);
+                    }
+                }
+
+
                 ImPlot::EndPlot();
 
             }

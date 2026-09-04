@@ -38,7 +38,7 @@ public:
         strcpy(sampleFilePath, "Drop sample here...");
         // Create our custom OLE interceptor instance
         new MyOleDropTarget(this);
-        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->sample, getWindow().getApp(), getWindow());
+        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->sample, getPluginDPSPointer()->engine, getWindow());
         if (editor) {
             editor->show();  // Tells the OS to make the window visible
         }

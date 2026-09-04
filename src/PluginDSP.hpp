@@ -11,12 +11,13 @@ START_NAMESPACE_DISTRHO
     class ImGuiPluginDSP : public Plugin
 {
     float fRelease = 0.0f;
-    SamplePlaybackEnginePolyphonic *engine;
 
 
 public:
     AudioData *sample;
     AudioData *releaseCurve;
+    SamplePlaybackEnginePolyphonic *engine;
+
     /**
       Plugin class constructor.@n
       You must set all parameter values to their defaults, matching ParameterRanges::def.
