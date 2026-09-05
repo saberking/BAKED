@@ -1,0 +1,44 @@
+diff --git a/distrho/DistrhoPlugin.hpp b/distrho/DistrhoPlugin.hpp
+index 8570f9e9..79d1197e 100644
+--- a/distrho/DistrhoPlugin.hpp
++++ b/distrho/DistrhoPlugin.hpp
+@@ -60,6 +60,7 @@ START_NAMESPACE_DISTRHO
+ class Plugin
+ {
+ public:
++    void *host;
+    /**
+       Plugin class constructor.@n
+       You must set all parameter values to their defaults, matching ParameterRanges::def.
+diff --git a/distrho/src/DistrhoPluginCLAP.cpp b/distrho/src/DistrhoPluginCLAP.cpp
+index 59390921..5da3acd8 100644
+--- a/distrho/src/DistrhoPluginCLAP.cpp
++++ b/distrho/src/DistrhoPluginCLAP.cpp
+@@ -199,6 +199,7 @@ static constexpr const sendNoteFunc sendNoteCallback = nullptr;
+ class ClapUI : public DGL_NAMESPACE::IdleCallback
+ {
+ public:
++    const void* clapPointer;
+     ClapUI(PluginExporter& plugin,
+            ClapEventQueue* const eventQueue,
+            const clap_host_t* const host,
+@@ -230,7 +231,8 @@ public:
+           fIsFloating(isFloating),
+           fScaleFactor(0.0),
+           fParentWindow(0),
+-          fTransientWindow(0)
++          fTransientWindow(0),
++          clapPointer(host)
+     {
+        #if DISTRHO_PLUGIN_WANT_MIDI_INPUT
+         fNotesRingBuffer.setRingBuffer(&eventQueue->fNotesBuffer, false);
+@@ -586,7 +588,8 @@ private:
+                              fPlugin.getInstancePointer(),
+                              fScaleFactor,
+                              DGL_NAMESPACE::Application::kTypeClassic);
+-
++        Plugin * instancePointer = (Plugin *)fPlugin.getInstancePointer();
++        instancePointer->host=(void *)clapPointer;
+        #if DISTRHO_PLUGIN_WANT_PROGRAMS
+         fUI->programLoaded(fCurrentProgram);
+        #endif
