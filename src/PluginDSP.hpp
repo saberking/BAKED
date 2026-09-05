@@ -6,9 +6,13 @@
 #include "WinConsoleOutput.hpp"
 #include "AudioData.hpp"
 #include "SamplerEngine.hpp"
+
 START_NAMESPACE_DISTRHO
 
-    class ImGuiPluginDSP : public Plugin
+
+
+
+class ImGuiPluginDSP : public Plugin
 {
     float fRelease = 0.0f;
 
@@ -17,6 +21,8 @@ public:
     AudioData *sample;
     AudioData *releaseCurve;
     SamplePlaybackEnginePolyphonic *engine;
+
+
 
     /**
       Plugin class constructor.@n
@@ -32,6 +38,8 @@ public:
         engine=new SamplePlaybackEnginePolyphonic();
         sample= new AudioData();
         releaseCurve=new AudioData();
+
+
 
     }
     ~ImGuiPluginDSP(){

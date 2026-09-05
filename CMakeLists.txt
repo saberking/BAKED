@@ -22,7 +22,7 @@ project(${NAME})
 # add_compile_definitions(WIN32_LEAN_AND_MEAN)
 add_subdirectory(dpf)
 
-set(TARGETS_LIST "vst3")
+#set(TARGETS_LIST "vst3")
 list(APPEND TARGETS_LIST "clap")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -51,6 +51,7 @@ target_sources(Baked
     src/SamplerEngine.hpp
     src/PluginDSP.hpp
 
+
 )
 
 target_include_directories(${NAME} PUBLIC src)
@@ -58,4 +59,5 @@ target_include_directories(${NAME} PUBLIC dpf-widgets/generic)
 target_include_directories(${NAME} PUBLIC dpf-widgets/opengl)
 target_include_directories(${NAME} PUBLIC dpf-widgets/opengl/DearImGui)
 add_compile_definitions(ImDrawIdx=unsigned\ int)
-target_link_libraries(Baked-vst3 PRIVATE comctl32)
+#target_link_libraries(Baked-vst3 PRIVATE comctl32)
+
