@@ -122,6 +122,8 @@ protected:
         parameter.shortName = "Release";
         parameter.symbol = "release";
         parameter.unit = "";
+        parameter.hints=kParameterIsAutomatable;
+
     }
 
     // ----------------------------------------------------------------------------------------------------------------
