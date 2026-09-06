@@ -13,7 +13,7 @@ START_NAMESPACE_DISTRHO
 
 class ImGuiPluginDSP : public Plugin
 {
-    float fRelease = 0.0f;
+    float fRelease = 1.0f;
     bool fReleaseEnabled=false;
 
 public:
@@ -147,10 +147,11 @@ protected:
             while ( curEventIndex < midiEventCount && i == midiEvents[curEventIndex].frame )
             {
 
-                handleMidi(&midiEvents[curEventIndex++]);;
+                handleMidi(&(midiEvents[curEventIndex++]));
 
             }
             float tempOut[2];
+            outputs[0][i]=outputs[1][i]=0;
             for(int j=0;j<modules.size();j++){
                 modules[j]->run(tempOut);
                 outputs[0][i]+=tempOut[0];outputs[1][i]+=tempOut[1];

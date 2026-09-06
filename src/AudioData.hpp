@@ -124,8 +124,11 @@ struct Module {
         outputs[0]=outputs[1]=0;
         float tempOuts[2];
         for(int i=0;i<MAX_POLY;i++){
-            playbackData[i]->run(tempOuts);
-            outputs[0]+=tempOuts[0];outputs[1]+=tempOuts[1];
+            if(playbackData[i]->playing)
+            {
+                playbackData[i]->run(tempOuts);
+                outputs[0]+=tempOuts[0];outputs[1]+=tempOuts[1];
+            }
         }
     }
 
