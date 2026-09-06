@@ -85,10 +85,11 @@ struct Module {
     bool *releaseEnabled;
     SamplePlaybackEngineMonophonic * playbackData[MAX_POLY];
 
-    Module(std::vector<float *> _levels, float *_releaseSpeed, float *_speed):
+    Module(std::vector<float *> _levels, float *_releaseSpeed, float *_speed, bool *_releaseEnabled):
         levels(_levels),
         releaseSpeed(_releaseSpeed),
-        speed(_speed)
+        speed(_speed),
+        releaseEnabled(_releaseEnabled)
     {
         sample=new AudioData(2);
         releaseCurve=new AudioData(1);
@@ -130,7 +131,8 @@ struct Module {
 
 };
 
-inline SamplePlaybackEngineMonophonic::  SamplePlaybackEngineMonophonic(Module *_module): module(_module){}
+inline SamplePlaybackEngineMonophonic::  SamplePlaybackEngineMonophonic(Module *_module):
+    module(_module){}
 inline float SamplePlaybackEngineMonophonic::getReleaseValue(){
     if(!playing) return 0;
     if(!released) return 1;
@@ -139,8 +141,8 @@ inline float SamplePlaybackEngineMonophonic::getReleaseValue(){
 inline void SamplePlaybackEngineMonophonic::timeStep(){
     if(playing){
         playhead+=*(module->speed);
-        playhead&&std::cout<<"playhead"<<playhead<<std::endl;
-        playhead&&std::cout<<"length"<<module->sample->length<<std::endl;
+        // playhead&&std::cout<<"playhead"<<playhead<<std::endl;
+        // playhead&&std::cout<<"length"<<module->sample->length<<std::endl;
         if(playhead>module->sample->length-1){
             stop(); return;
         }
@@ -177,8 +179,8 @@ inline void SamplePlaybackEngineMonophonic::run(float outputs[2]){
     }
     for(int i=0;i<2;i++){
         outputs[i]=module->sample->sampleData[i][(int)playhead].load(std::memory_order_relaxed)*getReleaseValue();
-        int show=((int)playhead)%100-1;
-        !show&&std::cout<<outputs[i]<<std::endl;
+        //int show=((int)playhead)%100-1;
+        //!show&&std::cout<<outputs[i]<<std::endl;
     }
     timeStep();
 }

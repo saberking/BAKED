@@ -14,7 +14,7 @@ START_NAMESPACE_DISTRHO
 class ImGuiPluginDSP : public Plugin
 {
     float fRelease = 0.0f;
-
+    bool fReleaseEnabled=false;
 
 public:
     std::vector<Module *> modules;
@@ -30,7 +30,7 @@ public:
         }
         std::vector<float *>levels;
         levels.push_back(&fRelease);
-        modules.push_back(new Module(levels, &fRelease, &fRelease));
+        modules.push_back(new Module(levels, &fRelease, &fRelease, &fReleaseEnabled));
 
     }
     ~ImGuiPluginDSP(){
@@ -38,65 +38,7 @@ public:
     }
 
 protected:
-    // ----------------------------------------------------------------------------------------------------------------
-    // Information
 
-    /**
-      Get the plugin label.@n
-      This label is a short restricted name consisting of only _, a-z, A-Z and 0-9 characters.
-    */
-    const char* getLabel() const noexcept override
-    {
-        return "BAKED";
-    }
-
-    /**
-      Get an extensive comment/description about the plugin.@n
-      Optional, returns nothing by default.
-    */
-    const char* getDescription() const override
-    {
-        return "Sampler with precomputed effects";
-    }
-
-    /**
-      Get the plugin author/maker.
-    */
-    const char* getMaker() const noexcept override
-    {
-        return "Jean Pierre Cimalando, falkTX, Saber";
-    }
-
-    /**
-      Get the plugin license (a single line of text or a URL).@n
-      For commercial plugins this should return some short copyright information.
-    */
-    const char* getLicense() const noexcept override
-    {
-        return "ISC";
-    }
-
-    /**
-      Get the plugin version, in hexadecimal.
-      @see d_version()
-    */
-    uint32_t getVersion() const noexcept override
-    {
-        return d_version(1, 0, 0);
-    }
-
-    /**
-      Get the plugin unique Id.@n
-      This value is used by LADSPA, DSSI and VST plugin formats.
-      @see d_cconst()
-    */
-    int64_t getUniqueId() const noexcept override
-    {
-        return d_cconst('B', 'A', 'K', 'D');
-    }
-
-    // ----------------------------------------------------------------------------------------------------------------
-    // Init
 
     /**
       Initialize the parameter @a index.@n
@@ -218,7 +160,65 @@ protected:
 
     }
 
+    // ----------------------------------------------------------------------------------------------------------------
+    // Information
 
+    /**
+      Get the plugin label.@n
+      This label is a short restricted name consisting of only _, a-z, A-Z and 0-9 characters.
+    */
+    const char* getLabel() const noexcept override
+    {
+        return "BAKED";
+    }
+
+    /**
+      Get an extensive comment/description about the plugin.@n
+      Optional, returns nothing by default.
+    */
+    const char* getDescription() const override
+    {
+        return "Sampler with precomputed effects";
+    }
+
+    /**
+      Get the plugin author/maker.
+    */
+    const char* getMaker() const noexcept override
+    {
+        return "Jean Pierre Cimalando, falkTX, Saber";
+    }
+
+    /**
+      Get the plugin license (a single line of text or a URL).@n
+      For commercial plugins this should return some short copyright information.
+    */
+    const char* getLicense() const noexcept override
+    {
+        return "ISC";
+    }
+
+    /**
+      Get the plugin version, in hexadecimal.
+      @see d_version()
+    */
+    uint32_t getVersion() const noexcept override
+    {
+        return d_version(1, 0, 0);
+    }
+
+    /**
+      Get the plugin unique Id.@n
+      This value is used by LADSPA, DSSI and VST plugin formats.
+      @see d_cconst()
+    */
+    int64_t getUniqueId() const noexcept override
+    {
+        return d_cconst('B', 'A', 'K', 'D');
+    }
+
+    // ----------------------------------------------------------------------------------------------------------------
+    // Init
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImGuiPluginDSP)
 };
 
