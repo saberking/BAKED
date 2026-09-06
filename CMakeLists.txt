@@ -43,7 +43,7 @@ target_sources(Baked
     src/WinConsoleOutput.hpp
     src/Editor.hpp
     src/AudioData.hpp
-    src/SamplerEngine.hpp
+
     src/PluginDSP.hpp
 )
 

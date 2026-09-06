@@ -39,7 +39,7 @@ public:
 
         strcpy(sampleFilePath, "Drop sample here...");
         new MyOleDropTarget(this);
-        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->sample, getPluginDPSPointer()->engine, getWindow());
+        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow());
         if (editor) {
             editor->show();
         }
@@ -52,7 +52,7 @@ public:
     }
 
     void setDroppedFilePath(const char* path) override {
-        getPluginDPSPointer()->sample->loadWavFile(path);
+        getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
         strcpy(sampleFilePath, path);
     }
 

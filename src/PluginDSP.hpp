@@ -5,7 +5,6 @@
 #include "Parameters.hpp"
 #include "WinConsoleOutput.hpp"
 #include "AudioData.hpp"
-#include "SamplerEngine.hpp"
 
 START_NAMESPACE_DISTRHO
 
@@ -18,12 +17,7 @@ class ImGuiPluginDSP : public Plugin
 
 
 public:
-    AudioData *sample;
-    AudioData *releaseCurve;
-    SamplePlaybackEnginePolyphonic *engine;
-
-
-
+    std::vector<Module *> modules;
     /**
       Plugin class constructor.@n
       You must set all parameter values to their defaults, matching ParameterRanges::def.
@@ -34,12 +28,9 @@ public:
         if (!GetConsoleWindow()) {
             initConsoleOutput();
         }
-
-        engine=new SamplePlaybackEnginePolyphonic();
-        sample= new AudioData();
-        releaseCurve=new AudioData();
-
-
+        std::vector<float *>levels;
+        levels.push_back(&fRelease);
+        modules.push_back(new Module(levels, &fRelease, &fRelease));
 
     }
     ~ImGuiPluginDSP(){
@@ -167,13 +158,39 @@ protected:
     }
 
     void setState(const char *key, const char * value){
-        if(strcmp(key, "loadWavFile")==0)
-        {
-            sample->loadWavFile(value);
+
+    }
+
+    void noteOn(int midiNote, int velocity){
+        for(int i=0;i<modules.size();i++){
+            modules[i]->noteOn(midiNote,velocity);
         }
     }
 
+    void noteOff(int midiNote){
+        for(int i=0;i<modules.size();i++){
+            modules[i]->noteOff(midiNote);
+        }
+    }
 
+    void handleMidi(const MidiEvent *midiEvent){
+        int status = midiEvent->data[0]; // midi status
+        int midi_message = status & 0xF0;
+        int midi_data1 = midiEvent->data[1];
+        int midi_data2 = midiEvent->data[2];
+
+        switch ( midi_message )
+        {
+        case 0x80: // note_off
+            noteOff(midi_data1);
+            break;
+        case 0x90: // note_on
+            noteOn(midi_data1, midi_data2);
+            break;
+        default:
+            break;
+        }
+    }
 
 
     void run ( const float **inputs, float **outputs, uint32_t frames,
@@ -182,41 +199,20 @@ protected:
              ) override
     {
 
-
-
-
-
         int curEventIndex =0;
         for ( uint32_t i = 0; i < frames; i++ )
         {
             while ( curEventIndex < midiEventCount && i == midiEvents[curEventIndex].frame )
             {
 
-                int status = midiEvents[curEventIndex].data[0]; // midi status
-                int midi_message = status & 0xF0;
-                int midi_data1 = midiEvents[curEventIndex].data[1];
-                int midi_data2 = midiEvents[curEventIndex].data[2];
-                //midiNote=midi_data1;
-
-                switch ( midi_message )
-                {
-                case 0x80: // note_off
-                    engine->noteOff(midi_data1);
-                    break;
-                case 0x90: // note_on
-                    engine->noteOn(midi_data1, midi_data2);
-                    break;
-                default:
-                    break;
-                }
-                curEventIndex++;
+                handleMidi(&midiEvents[curEventIndex++]);;
 
             }
             float tempOut[2];
-            engine->run(sample, fRelease, releaseCurve, tempOut);
-            outputs[0][i]=tempOut[0];outputs[1][i]=tempOut[1];
-
-
+            for(int j=0;j<modules.size();j++){
+                modules[j]->run(tempOut);
+                outputs[0][i]+=tempOut[0];outputs[1][i]+=tempOut[1];
+            }
 
         }
 

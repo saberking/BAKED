@@ -6,7 +6,6 @@
 #include "AudioData.hpp"
 #include "external/implot.h"
 #include "external/implot_internal.h"
-#include "SamplerEngine.hpp"
 
 
 START_NAMESPACE_DISTRHO
@@ -17,17 +16,18 @@ class SampleEditor : public DGL::ImGuiStandaloneWindow
 {
 public:
     AudioData *data;
-    SamplePlaybackEnginePolyphonic *engine;
+    Module *module;
+    bool isRelease=false;
     char name[MAX_FILE_PATH_LENGTH];
     ImPlotSpec spec;
     bool editMode=false;
 
 
-    SampleEditor(const char *_name, AudioData *_data, SamplePlaybackEnginePolyphonic *_engine, Window& window):
+    SampleEditor(const char *_name, Module *_module, Window& window):
         DGL::ImGuiStandaloneWindow(window.getApp(), window) {
         strcpy(name, _name);
-        data=_data;
-        engine=_engine;
+        module=_module;
+        if(!isRelease)data=module->sample;
         spec.Flags = ImPlotFlags_CanvasOnly;
         setResizable(true);
         ImPlot::CreateContext();
@@ -86,8 +86,8 @@ public:
                 ImPlot::SetupAxis(ImAxis_X1, "Samples", ImPlotAxisFlags_None);
                 ImPlot::PlotScatterG("My Line", AtomicVectorGetter, data, data->length, spec);
                 for(int i=0;i<MAX_POLY;i++){
-                    if(engine->engines[i]->playing){
-                        double playhead = engine->engines[i]->playhead;
+                    if(module->playbackData[i]->playing){
+                        double playhead = module->playbackData[i]->playhead;
                         ImPlot::DragLineX(0, &playhead, ImVec4(0.5,0.5,0.5,0.5), 0.5f, ImPlotDragToolFlags_NoInputs);
                     }
                 }
