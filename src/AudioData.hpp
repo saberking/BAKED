@@ -30,7 +30,7 @@ public:
         AudioFile<float> audioFile;
         audioFile.load ( filePath );
         int audioFileChannels = audioFile.getNumChannels();
-        int audioFileLength=audioFile.samples[0].size();
+        length=audioFile.samples[0].size();
         float temp;
         for(int i=0;i<length&&i<MAX_SAMPLE_LENGTH;i++)
         {
@@ -139,13 +139,18 @@ inline float SamplePlaybackEngineMonophonic::getReleaseValue(){
 inline void SamplePlaybackEngineMonophonic::timeStep(){
     if(playing){
         playhead+=*(module->speed);
+        playhead&&std::cout<<"playhead"<<playhead<<std::endl;
+        playhead&&std::cout<<"length"<<module->sample->length<<std::endl;
         if(playhead>module->sample->length-1){
             stop(); return;
         }
-        releasePlayhead+=*(module->releaseSpeed);
-        if(releasePlayhead>module->releaseCurve->length-1){
-            stop();
+        if(released){
+            releasePlayhead+=*(module->releaseSpeed);
+            if(releasePlayhead>module->releaseCurve->length-1){
+                stop();
+            }
         }
+
     }
 }
 inline void SamplePlaybackEngineMonophonic::stop(){
@@ -172,6 +177,8 @@ inline void SamplePlaybackEngineMonophonic::run(float outputs[2]){
     }
     for(int i=0;i<2;i++){
         outputs[i]=module->sample->sampleData[i][(int)playhead].load(std::memory_order_relaxed)*getReleaseValue();
+        int show=((int)playhead)%100-1;
+        !show&&std::cout<<outputs[i]<<std::endl;
     }
     timeStep();
 }
