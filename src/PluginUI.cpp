@@ -12,6 +12,7 @@
 #include "Editor.hpp"
 #include "PluginDSP.hpp"
 #include <../clap/include/clap/ext/context-menu.h>
+#include <thread>
 
 
 START_NAMESPACE_DISTRHO
@@ -37,7 +38,7 @@ public:
         if (isResizable())
             fResizeHandle.hide();
         oleDropTarget=new MyOleDropTarget(this);
-        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow());
+        //editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow());
         if (editor) {
             editor->show();
         }
@@ -100,34 +101,33 @@ protected:
                 setParameterValue(kParamRelease, fRelease);
 
             }
-            const clap_host_t* host=static_cast<const clap_host_t*>(getPluginDPSPointer()->host);
-            if(host &&ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+            if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
             {
+                const clap_host_t* host=static_cast<const clap_host_t*>(getPluginDPSPointer()->host);
+                if(host){
+                    // Query DAW for the context menu extension
+                    auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
+                    std::cout<<"menuExt"<<std::endl;
+                    if (menuExt && menuExt->popup)
+                    {
+                        std::cout<<"pop"<<std::endl;
+                        clap_context_menu_target_t target;
+                        target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
+                        target.id = kParamRelease;
 
-                // Query DAW for the context menu extension
-                auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
-                std::cout<<"menuExt"<<std::endl;
-                if (menuExt && menuExt->popup)
-                {
-                    std::cout<<"pop"<<std::endl;
-                    clap_context_menu_target_t target;
-                    target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
-                    target.id = kParamRelease;
 
+                        ImVec2 mousePos = ImGui::GetMousePos();
+                        int32_t screenX = static_cast<int32_t>(mousePos.x);
+                        int32_t screenY = static_cast<int32_t>(mousePos.y);
 
-                    ImVec2 mousePos = ImGui::GetMousePos();
-                    int32_t screenX = static_cast<int32_t>(mousePos.x);
-                    int32_t screenY = static_cast<int32_t>(mousePos.y);
-                    int32_t screenIndex = 0;
+                        std::thread([host, menuExt, target, screenX, screenY]() {
 
-                    menuExt->popup(
-                        host,
-                        &target,
-                        screenIndex,
-                        screenX,
-                        screenY
-                        );
+                            menuExt->popup(host, &target, 0, screenX, screenY);
+
+                        }).detach();
+                    }
                 }
+
             }
             if (ImGui::IsItemDeactivated())
             {

@@ -14,7 +14,8 @@ class ImGuiPluginDSP : public Plugin
     bool fReleaseEnabled=false;
     bool consoleAttached=false;
 public:
-    std::vector<Module *> modules;
+    std::vector<Module *> modules;//pointless to have more than one.
+                                // polyphonic effects should be baked in and monophonic can be separate plugins
     /**
       Plugin class constructor.@n
       You must set all parameter values to their defaults, matching ParameterRanges::def.
