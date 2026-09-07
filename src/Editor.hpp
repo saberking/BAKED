@@ -9,14 +9,13 @@
 
 
 START_NAMESPACE_DISTRHO
-#define MAX_FILE_PATH_LENGTH 256
 
 
 class SampleEditor : public DGL::ImGuiStandaloneWindow
 {
 public:
-    AudioData *data;
-    Module *module;
+    AudioData *data=NULL;
+    Module *module=NULL;
     bool isRelease=false;
     char name[MAX_FILE_PATH_LENGTH];
     ImPlotSpec spec;
@@ -34,19 +33,10 @@ public:
 
     }
 
-    // A custom callback function that ImPlot uses to grab values safely
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
         auto* vec_ptr = static_cast<AudioData*>(data_ptr);
-        float y_val=0;
-        // 2. Safely read using the arrow operator -> directly into the vector array index
-        // This tells the compiler: "Stay at this vector address, look 'idx' floats deep inside it"
-
-        y_val = vec_ptr->sampleData[0][idx].load(std::memory_order_relaxed);
+        float y_val = vec_ptr->sampleData[0][idx].load(std::memory_order_relaxed);
         return ImPlotPoint(idx, y_val);
-
-        // Alternative cleaner syntax that does the exact same safe lookup:
-        // float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
-
     }
 
 
@@ -63,20 +53,15 @@ public:
                 ImPlotInputMap& input_map = ImPlot::GetInputMap();
                 if (editMode)
                 {
-                    // Remap panning to Right Click cleanly
                     input_map.Pan = ImGuiMouseButton_Right;
 
-                    // BLOCKS BOX SELECT ZOOM NATIVELY:
-                    // Force the box-select mechanics to require all three modifier keys.
-                    // This frees up normal right-click dragging entirely for panning.
-                    input_map.SelectMod = ImGuiMod_Ctrl ;
+                    input_map.SelectMod = ImGuiMod_Ctrl ;//zoom
                 }
                 else
                 {
-                    // Restore default left-click drag panning and default right-click zooming
                     input_map.Pan = ImGuiMouseButton_Left;
 
-                    input_map.SelectMod = ImGuiMod_None;
+                    input_map.SelectMod = ImGuiMod_None;//zoom
                 }
 
                 ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
@@ -109,6 +94,10 @@ public:
 
         ImGui::End();
     }
+    ~SampleEditor(){
+        ImPlot::DestroyContext();
+    }
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleEditor)
 
 };
 

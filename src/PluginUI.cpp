@@ -22,7 +22,8 @@ class ImGuiPluginUI : public UI, public FileDropReceiver
     float fRelease = 1.f;
     ResizeHandle fResizeHandle;
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
-    SampleEditor *editor;
+    SampleEditor *editor=NULL;
+    MyOleDropTarget *oleDropTarget=NULL;
 public:
 
     ImGuiPluginUI()
@@ -35,16 +36,17 @@ public:
 
         if (isResizable())
             fResizeHandle.hide();
-
-
-        strcpy(sampleFilePath, "Drop sample here...");
-        new MyOleDropTarget(this);
+        oleDropTarget=new MyOleDropTarget(this);
         editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow());
         if (editor) {
             editor->show();
         }
 
     }
+
+    void stateChanged(const char* key, const char* value){
+        strcpy(sampleFilePath, value);
+    };
 
     ImGuiPluginDSP* getPluginDPSPointer(){
         auto* plugin = static_cast<ImGuiPluginDSP*>(getPluginInstancePointer());
@@ -53,6 +55,7 @@ public:
 
     void setDroppedFilePath(const char* path) override {
         getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
+        setState("sampleFilePath" ,path);
         strcpy(sampleFilePath, path);
     }
 
@@ -101,7 +104,7 @@ protected:
             if(host &&ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
             {
 
-                // 4. Query FL Studio for the Context Menu extension
+                // Query DAW for the context menu extension
                 auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
                 std::cout<<"menuExt"<<std::endl;
                 if (menuExt && menuExt->popup)
@@ -109,15 +112,14 @@ protected:
                     std::cout<<"pop"<<std::endl;
                     clap_context_menu_target_t target;
                     target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
-                    target.id = kParamRelease; // Use your active param variable
+                    target.id = kParamRelease;
 
-                    // Get position metrics from your ImGui UI canvas environment
+
                     ImVec2 mousePos = ImGui::GetMousePos();
                     int32_t screenX = static_cast<int32_t>(mousePos.x);
                     int32_t screenY = static_cast<int32_t>(mousePos.y);
-                    int32_t screenIndex = 0; // Default fallback to primary interface layer target
+                    int32_t screenIndex = 0;
 
-                    // Pass all 5 arguments exactly matching your definition file parameters
                     menuExt->popup(
                         host,
                         &target,
@@ -137,7 +139,8 @@ protected:
     }
 
     ~ImGuiPluginUI(){
-        ImPlot::DestroyContext();
+        delete(oleDropTarget);
+        delete(editor);
     }
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImGuiPluginUI)

@@ -1,5 +1,7 @@
 #ifndef AUDIO_DATA_HPP
 #define AUDIO_DATA_HPP
+#include "DistrhoPlugin.hpp"
+#include "Defines.hpp"
 #include "src/DistrhoDefines.h"
 #include "external/AudioFile.h"
 #include <atomic>
@@ -53,16 +55,13 @@ public:
         channels=1;
     }
     void makeStereo(){
-        // for(long i=0;i<length;i++)
-        // {
-        //     sampleData[1][i].store( sampleData[0][i].load(std::memory_order_relaxed),std::memory_order_relaxed);
-        // }
         channels=2;
     }
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioData)
 };
 struct Module;
 struct SamplePlaybackEngineMonophonic {
-    Module *module;
+    Module *module=NULL;
     float releasePlayhead=0;
     float playhead=0;
     bool playing=false;
@@ -75,14 +74,17 @@ struct SamplePlaybackEngineMonophonic {
     inline void run(float outputs[2]);
     SamplePlaybackEngineMonophonic(Module *_module);
     inline float getReleaseValue();
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SamplePlaybackEngineMonophonic)
+
 };
 struct Module {
-    AudioData *sample;
+    AudioData *sample=NULL;
     std::vector<float*> levels;
-    AudioData *releaseCurve;
-    float *releaseSpeed;
-    float *speed;
-    bool *releaseEnabled;
+    AudioData *releaseCurve=NULL;
+    float *releaseSpeed=NULL;
+    float *speed=NULL;
+    bool *releaseEnabled=NULL;
+    char sampleFilePath[MAX_FILE_PATH_LENGTH];
     SamplePlaybackEngineMonophonic * playbackData[MAX_POLY];
 
     Module(std::vector<float *> _levels, float *_releaseSpeed, float *_speed, bool *_releaseEnabled):
@@ -91,6 +93,7 @@ struct Module {
         speed(_speed),
         releaseEnabled(_releaseEnabled)
     {
+        strcpy(sampleFilePath, "Drop sample here...");
         sample=new AudioData(2);
         releaseCurve=new AudioData(1);
         for(int i=0;i<MAX_POLY;i++){
@@ -131,6 +134,7 @@ struct Module {
             }
         }
     }
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Module)
 
 };
 
@@ -144,8 +148,6 @@ inline float SamplePlaybackEngineMonophonic::getReleaseValue(){
 inline void SamplePlaybackEngineMonophonic::timeStep(){
     if(playing){
         playhead+=*(module->speed);
-        // playhead&&std::cout<<"playhead"<<playhead<<std::endl;
-        // playhead&&std::cout<<"length"<<module->sample->length<<std::endl;
         if(playhead>module->sample->length-1){
             stop(); return;
         }
@@ -182,8 +184,6 @@ inline void SamplePlaybackEngineMonophonic::run(float outputs[2]){
     }
     for(int i=0;i<2;i++){
         outputs[i]=module->sample->sampleData[i][(int)playhead].load(std::memory_order_relaxed)*getReleaseValue();
-        //int show=((int)playhead)%100-1;
-        //!show&&std::cout<<outputs[i]<<std::endl;
     }
     timeStep();
 }

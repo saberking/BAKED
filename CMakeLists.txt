@@ -45,6 +45,7 @@ target_sources(Baked
     src/AudioData.hpp
 
     src/PluginDSP.hpp
+    src/Defines.hpp
 )
 
 target_include_directories(${NAME} PUBLIC src)

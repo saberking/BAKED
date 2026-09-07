@@ -8,14 +8,11 @@
 
 START_NAMESPACE_DISTRHO
 
-
-
-
 class ImGuiPluginDSP : public Plugin
 {
     float fRelease = 1.0f;
     bool fReleaseEnabled=false;
-
+    bool consoleAttached=false;
 public:
     std::vector<Module *> modules;
     /**
@@ -23,10 +20,11 @@ public:
       You must set all parameter values to their defaults, matching ParameterRanges::def.
     */
     ImGuiPluginDSP()
-        : Plugin(kParamCount, 0, 0) // parameters, programs, states
+        : Plugin(kParamCount, 0, 1) // parameters, programs, states
     {
         if (!GetConsoleWindow()) {
             initConsoleOutput();
+            consoleAttached=true;
         }
         std::vector<float *>levels;
         levels.push_back(&fRelease);
@@ -34,7 +32,10 @@ public:
 
     }
     ~ImGuiPluginDSP(){
-        FreeConsole();
+        consoleAttached&&FreeConsole();
+        for(int i=0;i<modules.size();i++){
+            delete(modules[i]);
+        }
     }
 
 protected:
@@ -59,13 +60,6 @@ protected:
 
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Internal data
-
-    /**
-      Get the current value of a parameter.@n
-      The host may call this function from any context, including realtime processing.
-    */
     float getParameterValue(uint32_t index) const override
     {
         if(index==kParamRelease){
@@ -73,34 +67,35 @@ protected:
         }
     }
 
-    /**
-      Change a parameter value.@n
-      The host may call this function from any context, including realtime processing.@n
-      When a parameter is marked as automatable, you must ensure no non-realtime operations are performed.
-      @note This function will only be called for parameter inputs.
-    */
+
     void setParameterValue(uint32_t index, float value) override
     {
         fRelease = value;
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Audio/MIDI Processing
-
-    /**
-      Activate this plugin.
-    */
     void activate() override
     {
     }
 
+    void initState(uint32_t index, String& key, String& defaultValue) override
+    {
+        if (index == 0) {
+            key = "sampleFilePath";
+            defaultValue = "Drop sample here";
+        }
+    }
+
     String getState(const char* key) const override {
 
-        return (String) "";
+        return (String) (modules[0]->sampleFilePath);
     }
 
     void setState(const char *key, const char * value){
-
+        if(strcmp(key, "sampleFilePath")==0){
+            strcpy(modules[0]->sampleFilePath, value);
+        }else{
+            updateStateValue("sampleFilePath", modules[0]->sampleFilePath);
+        }
     }
 
     void noteOn(int midiNote, int velocity){

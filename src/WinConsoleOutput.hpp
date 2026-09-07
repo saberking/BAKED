@@ -8,7 +8,7 @@ START_NAMESPACE_DISTRHO
 
 inline void initConsoleOutput(){
     AllocConsole();
-    FILE* fDummy;
+    FILE* fDummy=NULL;
     freopen_s(&fDummy, "CONOUT$", "w", stdout);
     std::cout << "VST Console Initialized!" << std::endl;
 }

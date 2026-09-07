@@ -7,7 +7,7 @@
 #define _WIN32_WINNT 0x0601
 #endif
 
-#include "src/DistrhoDefines.h"
+#include "DistrhoUI.hpp"
 #include <windows.h>
 #include <shellapi.h>
 #include <ole2.h>
@@ -16,9 +16,11 @@ START_NAMESPACE_DISTRHO
 
 class FileDropReceiver {
 public:
+
     virtual ~FileDropReceiver() = default;
     virtual void setDroppedFilePath(const char* path) = 0;
     virtual Window& getWindow() const = 0;
+
 };
 
 class MyOleDropTarget : public IDropTarget
@@ -31,9 +33,7 @@ public:
     MyOleDropTarget(FileDropReceiver* receiver) : m_receiver(receiver) {
         OleInitialize(NULL);
 
-        // Grab the window handle from the DPF template context
         HWND pluginHwnd = (HWND)receiver->getWindow().getNativeWindowHandle();
-        // Force the operating system to map our interceptor onto the plugin view window
         RegisterDragDrop(pluginHwnd, this);
     }
 
@@ -83,7 +83,6 @@ public:
 
             if (DragQueryFileA(hDrop, 0, droppedPath, MAX_PATH))
             {
-                // Send the path straight through the interface!
                 if (m_receiver != nullptr) {
                     m_receiver->setDroppedFilePath(droppedPath);
                 }
@@ -96,6 +95,8 @@ public:
         *pdwEffect = DROPEFFECT_COPY;
         return S_OK;
     }
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MyOleDropTarget)
+
 };
 
 END_NAMESPACE_DISTRHO
