@@ -10,7 +10,7 @@ START_NAMESPACE_DISTRHO
 
 class ImGuiPluginDSP : public Plugin
 {
-    float fRelease = 1.0f;
+    float fSpeed = 1.0f;
     bool fReleaseEnabled=false;
     bool consoleAttached=false;
 public:
@@ -28,8 +28,8 @@ public:
             consoleAttached=true;
         }
         std::vector<float *>levels;
-        levels.push_back(&fRelease);
-        modules.push_back(new Module(levels, &fRelease, &fRelease, &fReleaseEnabled));
+        levels.push_back(&fSpeed);
+        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &fReleaseEnabled));
 
     }
     ~ImGuiPluginDSP(){
@@ -53,9 +53,9 @@ protected:
         parameter.ranges.min = 0.f;
         parameter.ranges.max = 1.f;
         parameter.ranges.def = 1.f;
-        parameter.name = "Release";
-        parameter.shortName = "Release";
-        parameter.symbol = "release";
+        parameter.name = "Speed";
+        parameter.shortName = "Speed";
+        parameter.symbol = "speed";
         parameter.unit = "";
         parameter.hints=kParameterIsAutomatable;
 
@@ -63,15 +63,15 @@ protected:
 
     float getParameterValue(uint32_t index) const override
     {
-        if(index==kParamRelease){
-            return fRelease;
+        if(index==kParamSpeed){
+            return fSpeed;
         }
     }
 
 
     void setParameterValue(uint32_t index, float value) override
     {
-        fRelease = value;
+        fSpeed = value;
     }
 
     void activate() override

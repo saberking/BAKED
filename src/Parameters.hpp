@@ -4,7 +4,7 @@
 
 START_NAMESPACE_DISTRHO
 enum Parameters {
-    kParamRelease = 0,
+    kParamSpeed = 0,
     kParamCount
 };
 END_NAMESPACE_DISTRHO

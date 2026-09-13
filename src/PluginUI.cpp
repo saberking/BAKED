@@ -20,7 +20,7 @@ START_NAMESPACE_DISTRHO
 
 class ImGuiPluginUI : public UI, public FileDropReceiver
 {
-    float fRelease = 1.f;
+    float fSpeed = 1.f;
     ResizeHandle fResizeHandle;
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
     SampleEditor *editor=NULL;
@@ -66,7 +66,7 @@ public:
 
 protected:
     void parameterChanged(uint32_t index, float value) override {
-        fRelease = value;
+        fSpeed = value;
         repaint();
     }
 
@@ -93,12 +93,12 @@ protected:
             ImGui::Separator();
             ImGui::Spacing();
 
-            if (ImGui::SliderFloat("Release", &fRelease, 0.f, 1.f))
+            if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
             {
                 if (ImGui::IsItemActivated())
-                    editParameter(kParamRelease, true);
+                    editParameter(kParamSpeed, true);
 
-                setParameterValue(kParamRelease, fRelease);
+                setParameterValue(kParamSpeed, fSpeed);
 
             }
             if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
@@ -113,7 +113,7 @@ protected:
                         std::cout<<"pop"<<std::endl;
                         clap_context_menu_target_t target;
                         target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
-                        target.id = kParamRelease;
+                        target.id = kParamSpeed;
 
 
                         ImVec2 mousePos = ImGui::GetMousePos();
@@ -131,7 +131,7 @@ protected:
             }
             if (ImGui::IsItemDeactivated())
             {
-                editParameter(kParamRelease, false);
+                editParameter(kParamSpeed, false);
             }
         }
         ImGui::End();
