@@ -38,7 +38,7 @@ public:
         if (isResizable())
             fResizeHandle.hide();
         oleDropTarget=new MyOleDropTarget(this);
-        //editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow());
+        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow());
         if (editor) {
             editor->show();
         }

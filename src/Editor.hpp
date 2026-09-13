@@ -20,6 +20,7 @@ public:
     char name[MAX_FILE_PATH_LENGTH];
     ImPlotSpec spec;
     bool editMode=false;
+    ImPlotContext* imPlotContext = nullptr;
 
 
     SampleEditor(const char *_name, Module *_module, Window& window):
@@ -29,7 +30,7 @@ public:
         if(!isRelease)data=module->sample;
         spec.Flags = ImPlotFlags_CanvasOnly;
         setResizable(true);
-        ImPlot::CreateContext();
+        imPlotContext=ImPlot::CreateContext();
 
     }
 
@@ -41,6 +42,9 @@ public:
 
 
     void onImGuiDisplay() override{
+
+        ImPlot::SetCurrentContext(imPlotContext);
+        ImGui::PushID(this);
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
@@ -93,9 +97,10 @@ public:
         }
 
         ImGui::End();
+        ImGui::PopID();
     }
     ~SampleEditor(){
-        ImPlot::DestroyContext();
+        ImPlot::DestroyContext(imPlotContext);
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleEditor)
 
