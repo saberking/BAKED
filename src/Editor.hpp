@@ -96,12 +96,11 @@ public:
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
-        ImPlotFlags plotFlags = ImPlotFlags_None;
 
 
 
         if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
-            if (data&&ImPlot::BeginPlot("My Plot")) {
+            if (data&&ImPlot::BeginPlot(isSpectrum?"Spectrum":"Waveform")) {
                 ImPlotInputMap& input_map = ImPlot::GetInputMap();
                 if (editMode)
                 {
@@ -116,17 +115,17 @@ public:
                     input_map.SelectMod = ImGuiMod_None;//zoom
                 }
 
-                ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
+                ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", isSpectrum?ImPlotAxisFlags_None:ImPlotAxisFlags_Lock);
+                ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, isSpectrum? ImPlotCond_Once:ImPlotCond_Always);
 
                 // Allow the X-axis to scroll and zoom normally
                 ImPlot::SetupAxis(ImAxis_X1, "Samples", ImPlotAxisFlags_None);
                     ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                 if(isSpectrum&&spectrumReady){
-                    ImPlot::PlotScatterG("My Line", SpectrumGetter, spectrum, spectrum->size(), spec);
+                    ImPlot::PlotScatterG("Spectrum###DataSlot", SpectrumGetter, spectrum, spectrum->size(), spec);
 
                 }else{
-                    ImPlot::PlotScatterG("My Line", AtomicVectorGetter, data, data->length, spec);
+                    ImPlot::PlotScatterG("My Line###DataSlot", AtomicVectorGetter, data, data->length, spec);
 
                 }
 
@@ -147,10 +146,11 @@ public:
                     }
                 }
                 ImPlot::EndPlot();
-                ImGui::Checkbox("Edit", &editMode);
-                if(ImGui::Checkbox("Show Spectrum", &isSpectrum)&&isSpectrum){
-                    calculateFFT();
-                }
+
+            }
+            ImGui::Checkbox("Edit", &editMode);
+            if(ImGui::Checkbox("Show Spectrum", &isSpectrum)&&isSpectrum){
+                calculateFFT();
             }
         }
 
