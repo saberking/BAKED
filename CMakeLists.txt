@@ -53,3 +53,5 @@ target_include_directories(${NAME} PUBLIC dpf-widgets/generic)
 target_include_directories(${NAME} PUBLIC dpf-widgets/opengl)
 target_include_directories(${NAME} PUBLIC dpf-widgets/opengl/DearImGui)
 add_compile_definitions(ImDrawIdx=unsigned\ int)
+target_link_libraries(Baked-ui PRIVATE comctl32)
+

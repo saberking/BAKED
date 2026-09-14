@@ -12,11 +12,20 @@
 #include "Editor.hpp"
 #include "PluginDSP.hpp"
 #include <../clap/include/clap/ext/context-menu.h>
-#include <thread>
+#include <windows.h>
+#include <commctrl.h> // For SetWindowSubclass API
+#pragma comment(lib, "comctl32.lib")
 
 
 START_NAMESPACE_DISTRHO
 
+//for right click autmoaiton clip
+static UINT WM_TRIGGER_CLAP_MENU = 0;
+struct AsyncMenuPayload {//for right click autmoaiton clip
+    const clap_host_t* host;
+    int32_t screenX;
+    int32_t screenY;
+};
 
 class ImGuiPluginUI : public UI, public FileDropReceiver
 {
@@ -31,6 +40,10 @@ public:
         : UI(),
         fResizeHandle(this)
     {
+        //create unique id for automation clip window
+        WM_TRIGGER_CLAP_MENU = ::RegisterWindowMessageA("MyUniquePlugin_ClapContextMenu_TriggerMsg");
+        HWND hwnd = (HWND)getWindow().getNativeWindowHandle();
+        ::SetWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this), 0);
         const double scaleFactor = getScaleFactor();
         setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
 
@@ -62,6 +75,37 @@ public:
 
     Window& getWindow() const override {
         return UI::getWindow();
+    }
+
+    static LRESULT CALLBACK SubclassMenuProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
+                                             UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+    {
+        if (uMsg == WM_TRIGGER_CLAP_MENU)
+        {
+            // Safely extract the heap data passed through the OS message queue
+            auto* payload = reinterpret_cast<AsyncMenuPayload*>(wParam);
+            if (payload)
+            {
+                auto* menuExt = (const clap_host_context_menu_t*)payload->host->get_extension(payload->host, CLAP_EXT_CONTEXT_MENU);
+                if (menuExt && menuExt->popup)
+                {
+                    clap_context_menu_target_t target;
+                    target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
+                    target.id = kParamSpeed;
+
+                    // Open the menu cleanly outside of the active ImGui/DPF render cycle.
+                    // This un-freezes both windows and eliminates the multi-instance crash!
+                    menuExt->popup(payload->host, &target, 0, payload->screenX, payload->screenY);
+                }
+
+                // Delete the temporary payload allocation immediately after use
+                delete payload;
+            }
+            return 0;
+        }
+
+        // Pass every other standard OS window message safely back to DPF
+        return ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
 
 protected:
@@ -104,6 +148,8 @@ protected:
             if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
             {
                 const clap_host_t* host=static_cast<const clap_host_t*>(getPluginDPSPointer()->host);
+                HWND hwnd = reinterpret_cast<HWND>(getWindow().getNativeWindowHandle());
+
                 if(host){
                     // Query DAW for the context menu extension
                     auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
@@ -111,20 +157,30 @@ protected:
                     if (menuExt && menuExt->popup)
                     {
                         std::cout<<"pop"<<std::endl;
-                        clap_context_menu_target_t target;
-                        target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
-                        target.id = kParamSpeed;
+                        // clap_context_menu_target_t target;
+                        // target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
+                        // target.id = kParamSpeed;
 
+
+                        // ImVec2 mousePos = ImGui::GetMousePos();
+                        // int32_t screenX = static_cast<int32_t>(mousePos.x);
+                        // int32_t screenY = static_cast<int32_t>(mousePos.y);
+
+                        // std::thread([host, menuExt, target, screenX, screenY]() {
+
+                        //     menuExt->popup(host, &target, 0, screenX, screenY);
+
+                        // }).detach();
 
                         ImVec2 mousePos = ImGui::GetMousePos();
-                        int32_t screenX = static_cast<int32_t>(mousePos.x);
-                        int32_t screenY = static_cast<int32_t>(mousePos.y);
 
-                        std::thread([host, menuExt, target, screenX, screenY]() {
+                        auto* payload = new AsyncMenuPayload();
+                        payload->host = host;
+                        payload->screenX = mousePos.x;
+                        payload->screenY = mousePos.y;
 
-                            menuExt->popup(host, &target, 0, screenX, screenY);
-
-                        }).detach();
+                        // Clean modern casts everywhere
+                        ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
                     }
                 }
 
@@ -139,6 +195,9 @@ protected:
     }
 
     ~ImGuiPluginUI(){
+        HWND hwnd = (HWND)getWindow().getNativeWindowHandle();
+
+        ::RemoveWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this));
         delete(oleDropTarget);
         delete(editor);
     }
