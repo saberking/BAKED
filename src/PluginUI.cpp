@@ -166,7 +166,6 @@ protected:
                         payload->screenX = mousePos.x;
                         payload->screenY = mousePos.y;
 
-                        // Clean modern casts everywhere
                         ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
                     }
                 }

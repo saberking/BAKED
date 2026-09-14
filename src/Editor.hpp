@@ -84,8 +84,8 @@ public:
                     ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
                     if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH){
                         data->sampleData[0][current_pos.x]=current_pos.y;
-                        if(data->length<current_pos.x){
-                            data->length=current_pos.x;
+                        if(data->length<(int)current_pos.x+1){
+                            data->length=(int)current_pos.x+1;
                         }
                     }
                 }
