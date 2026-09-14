@@ -157,20 +157,7 @@ protected:
                     if (menuExt && menuExt->popup)
                     {
                         std::cout<<"pop"<<std::endl;
-                        // clap_context_menu_target_t target;
-                        // target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
-                        // target.id = kParamSpeed;
 
-
-                        // ImVec2 mousePos = ImGui::GetMousePos();
-                        // int32_t screenX = static_cast<int32_t>(mousePos.x);
-                        // int32_t screenY = static_cast<int32_t>(mousePos.y);
-
-                        // std::thread([host, menuExt, target, screenX, screenY]() {
-
-                        //     menuExt->popup(host, &target, 0, screenX, screenY);
-
-                        // }).detach();
 
                         ImVec2 mousePos = ImGui::GetMousePos();
 
