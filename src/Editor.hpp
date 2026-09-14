@@ -46,12 +46,12 @@ public:
 
     static ImPlotPoint SpectrumGetter(int idx, void* data_ptr){
         auto* vec_ptr = static_cast<std::vector<std::complex<float>>*>(data_ptr);
-        float y_val = (*vec_ptr)[idx].real();
+        float y_val = std::abs((*vec_ptr)[idx]);
         return ImPlotPoint(idx, y_val);
     }
 
     void calculateFFT(){
-        std::vector<std::complex<float>> data_in ( MAX_SAMPLE_LENGTH );
+        std::vector<std::complex<float>> data_in ( data->length );
         pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
         pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
         pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
@@ -60,8 +60,8 @@ public:
         bool forward{ pocketfft::FORWARD };                                            // FORWARD or BACKWARD
         // input data (reals)
         // output data (FFT(input))
-        float fct{ 1 /MAX_SAMPLE_LENGTH};    // scaling factor
-        shape_in[0]=MAX_SAMPLE_LENGTH;
+        float fct{ 1.0f /data->length};    // scaling factor
+        shape_in[0]=data->length;
         pocketfft::shape_t axes;
 
         axes.push_back ( 0 );
@@ -70,9 +70,9 @@ public:
         {
             data_in[i]=std::complex<float> ( data->sampleData[0][i].load(std::memory_order_relaxed),0.f );
         }
-        while(i<MAX_SAMPLE_LENGTH){
-            data_in[i++]=std::polar<float> ( 0.f, 0.f );
-        }
+        // while(i<MAX_SAMPLE_LENGTH){
+        //     data_in[i++]=std::polar<float> ( 0.f, 0.f );
+        // }
 
 
         pocketfft::c2c (
@@ -122,7 +122,7 @@ public:
                 ImPlot::SetupAxis(ImAxis_X1, "Samples", ImPlotAxisFlags_None);
                     ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                 if(isSpectrum&&spectrumReady){
-                    ImPlot::PlotScatterG("Spectrum###DataSlot", SpectrumGetter, spectrum, spectrum->size(), spec);
+                    ImPlot::PlotScatterG("Spectrum###DataSlot", SpectrumGetter, spectrum, data->length/2, spec);
 
                 }else{
                     ImPlot::PlotScatterG("My Line###DataSlot", AtomicVectorGetter, data, data->length, spec);
