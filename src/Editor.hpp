@@ -11,6 +11,10 @@
 
 START_NAMESPACE_DISTRHO
 
+struct PlotAudioContext {
+    AudioData* audioData;
+    int channel;
+};
 
 class SampleEditor : public DGL::ImGuiStandaloneWindow
 {
@@ -44,10 +48,11 @@ public:
     }
 
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
-        auto* vec_ptr = static_cast<AudioData*>(data_ptr);
-        float y_val = vec_ptr->sampleData[0][idx].load(std::memory_order_relaxed);
+        auto* vec_ptr = static_cast<PlotAudioContext*>(data_ptr);
+        float y_val = vec_ptr->audioData->sampleData[vec_ptr->channel][idx].load(std::memory_order_relaxed);
         return ImPlotPoint(idx, y_val);
     }
+
 
     static ImPlotPoint SpectrumGetter(int idx, void* data_ptr){
         auto* vec_ptr = static_cast<std::vector<std::complex<float>>*>(data_ptr);
@@ -118,6 +123,10 @@ public:
         }
     }
 
+    void plotWaveform(){
+
+    }
+
     void calculateWaveform(){}
 
     void onImGuiDisplay() override{
@@ -128,7 +137,7 @@ public:
         ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
         int plotIndex=0;
 
-
+        if(!data)return;
         if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
             if(ImGui::Checkbox("Mono", &isMono)){
                 if(isMono)data->channels.store(1, std::memory_order_relaxed);
@@ -141,49 +150,47 @@ public:
             }
             ImGui::Checkbox("Edit", &editMode);
 
+            for(int channel=0;channel<1||!isMono&&channel<2;channel++){
+                if(isSpectrum){
+                    ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+                    if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L")){
+                        setInputMap();
+                        ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
 
-            if(isSpectrum){
-                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
-                if (ImPlot::BeginPlot("Spectrum")){
-                    setInputMap();
-                    ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                    ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
+                        // Allow the X-axis to scroll and zoom normally
+                        ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
+                        ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
+                    }
+                    ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum, data->length/2, spec);
 
-                    // Allow the X-axis to scroll and zoom normally
-                    ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
-                    ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
-                }
-                ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum, data->length/2, spec);
+                }else{
+                    ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+                    if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L")){
+                        setInputMap();
 
-            }else{
-                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
-                if(ImPlot::BeginPlot("Waveform")){
-                    setInputMap();
+                        ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
 
-                    ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                    ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
-
-                    // Allow the X-axis to scroll and zoom normally
-                    ImPlot::SetupAxis(ImAxis_X1, "Sample", ImPlotAxisFlags_None);
-                    ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
-
-                    ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, data, data->length, spec);
-                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
-                        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-                        if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH){
-                            data->sampleData[0][current_pos.x].store(current_pos.y);
-                            if(data->length<(int)current_pos.x+1){
-                                data->length=(int)current_pos.x+1;
+                        // Allow the X-axis to scroll and zoom normally
+                        ImPlot::SetupAxis(ImAxis_X1, "Sample", ImPlotAxisFlags_None);
+                        ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
+                        PlotAudioContext plotAudioContext { data, channel };
+                        ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &plotAudioContext, data->length, spec);
+                        if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                            ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                            if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH){
+                                data->sampleData[channel][current_pos.x].store(current_pos.y);
+                                if(data->length<(int)current_pos.x+1){
+                                    data->length=(int)current_pos.x+1;
+                                }
                             }
                         }
                     }
                 }
+                showPlayhead();
+                ImPlot::EndPlot();
             }
-
-            showPlayhead();
-            ImPlot::EndPlot();
-
-
         }
 
         ImGui::End();
