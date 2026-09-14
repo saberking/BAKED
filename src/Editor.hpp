@@ -57,10 +57,10 @@ public:
         pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
         stride_in[0]=stride_out[0]=sizeof ( std::complex<float> );
         //  pocketfft::shape_t axes{1};                                                  // 0 to shape.size()-1 inclusive
-        bool forward{ pocketfft::BACKWARD };                                            // FORWARD or BACKWARD
+        bool forward{ pocketfft::FORWARD };                                            // FORWARD or BACKWARD
         // input data (reals)
         // output data (FFT(input))
-        float fct{ 1.0f };    // scaling factor
+        float fct{ 1 /MAX_SAMPLE_LENGTH};    // scaling factor
         shape_in[0]=MAX_SAMPLE_LENGTH;
         pocketfft::shape_t axes;
 
@@ -68,7 +68,7 @@ public:
         int i;
         for ( i=0; i<data->length; i++ )
         {
-            data_in[i]=std::polar<float> ( (float) i, data->sampleData[0][i] );
+            data_in[i]=std::complex<float> ( data->sampleData[0][i].load(std::memory_order_relaxed),0.f );
         }
         while(i<MAX_SAMPLE_LENGTH){
             data_in[i++]=std::polar<float> ( 0.f, 0.f );
@@ -115,8 +115,8 @@ public:
                     input_map.SelectMod = ImGuiMod_None;//zoom
                 }
 
-                ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", isSpectrum?ImPlotAxisFlags_None:ImPlotAxisFlags_Lock);
-                ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, isSpectrum? ImPlotCond_Once:ImPlotCond_Always);
+                ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
+                ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
 
                 // Allow the X-axis to scroll and zoom normally
                 ImPlot::SetupAxis(ImAxis_X1, "Samples", ImPlotAxisFlags_None);
