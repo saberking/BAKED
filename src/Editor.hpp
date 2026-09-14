@@ -22,7 +22,9 @@ public:
     ImPlotSpec spec;
     bool editMode=false;
     bool isSpectrum=false;
-    ImPlotContext* imPlotContext = nullptr;
+    bool isMono=false;
+    bool isSpectrumChanged=false;
+    ImPlotContext* imPlotContext[4];
     std::vector<std::complex<float>> *spectrum ;
     bool spectrumReady=false;
 
@@ -34,7 +36,10 @@ public:
         if(!isRelease)data=module->sample;
         spec.Flags = ImPlotFlags_CanvasOnly;
         setResizable(true);
-        imPlotContext=ImPlot::CreateContext();
+        for(int i=0;i<4;i++){
+            imPlotContext[i]=ImPlot::CreateContext();
+        }
+
         spectrum = new std::vector<std::complex<float>>  ( MAX_SAMPLE_LENGTH );
     }
 
@@ -88,77 +93,106 @@ public:
         spectrumReady=true;
     }
 
+    void setInputMap(){
+        ImPlotInputMap &inputMap=ImPlot::GetInputMap();
+        if (editMode)
+        {
+            inputMap.Pan = ImGuiMouseButton_Right;
+
+            inputMap.SelectMod = ImGuiMod_Ctrl ;//zoom
+        }
+        else
+        {
+            inputMap.Pan = ImGuiMouseButton_Left;
+
+            inputMap.SelectMod = ImGuiMod_None;//zoom
+        }
+    }
+
+    void showPlayhead(){
+        for(int i=0;i<MAX_POLY;i++){
+            if(module->playbackData[i]->playing){
+                double playhead = module->playbackData[i]->playhead;
+                ImPlot::DragLineX(0, &playhead, ImVec4(0.5,0.5,0.5,0.5), 0.5f, ImPlotDragToolFlags_NoInputs);
+            }
+        }
+    }
+
+    void calculateWaveform(){}
 
     void onImGuiDisplay() override{
 
-        ImPlot::SetCurrentContext(imPlotContext);
         ImGui::PushID(this);
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
-
+        int plotIndex=0;
 
 
         if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
-            if (data&&ImPlot::BeginPlot(isSpectrum?"Spectrum":"Waveform")) {
-                ImPlotInputMap& input_map = ImPlot::GetInputMap();
-                if (editMode)
-                {
-                    input_map.Pan = ImGuiMouseButton_Right;
+            if(ImGui::Checkbox("Mono", &isMono)){
+                if(isMono)data->channels.store(1, std::memory_order_relaxed);
+                else data->channels.store(2, std::memory_order_relaxed);
+            }
 
-                    input_map.SelectMod = ImGuiMod_Ctrl ;//zoom
-                }
-                else
-                {
-                    input_map.Pan = ImGuiMouseButton_Left;
+            if(ImGui::Checkbox("Show Spectrum", &isSpectrum)){
+                if(isSpectrum)calculateFFT();
+                else if (isSpectrumChanged)calculateWaveform();
+            }
+            ImGui::Checkbox("Edit", &editMode);
 
-                    input_map.SelectMod = ImGuiMod_None;//zoom
-                }
 
-                ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
+            if(isSpectrum){
+                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+                if (ImPlot::BeginPlot("Spectrum")){
+                    setInputMap();
+                    ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
+                    ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
 
-                // Allow the X-axis to scroll and zoom normally
-                ImPlot::SetupAxis(ImAxis_X1, "Samples", ImPlotAxisFlags_None);
+                    // Allow the X-axis to scroll and zoom normally
+                    ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
                     ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
-                if(isSpectrum&&spectrumReady){
-                    ImPlot::PlotScatterG("Spectrum###DataSlot", SpectrumGetter, spectrum, data->length/2, spec);
-
-                }else{
-                    ImPlot::PlotScatterG("My Line###DataSlot", AtomicVectorGetter, data, data->length, spec);
-
                 }
+                ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum, data->length/2, spec);
 
-                if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
-                    ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-                    if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH){
-                        data->sampleData[0][current_pos.x]=current_pos.y;
-                        if(data->length<(int)current_pos.x+1){
-                            data->length=(int)current_pos.x+1;
+            }else{
+                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+                if(ImPlot::BeginPlot("Waveform")){
+                    setInputMap();
+
+                    ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
+                    ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
+
+                    // Allow the X-axis to scroll and zoom normally
+                    ImPlot::SetupAxis(ImAxis_X1, "Sample", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
+
+                    ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, data, data->length, spec);
+                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                        if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH){
+                            data->sampleData[0][current_pos.x].store(current_pos.y);
+                            if(data->length<(int)current_pos.x+1){
+                                data->length=(int)current_pos.x+1;
+                            }
                         }
                     }
                 }
-
-                for(int i=0;i<MAX_POLY;i++){
-                    if(module->playbackData[i]->playing){
-                        double playhead = module->playbackData[i]->playhead;
-                        ImPlot::DragLineX(0, &playhead, ImVec4(0.5,0.5,0.5,0.5), 0.5f, ImPlotDragToolFlags_NoInputs);
-                    }
-                }
-                ImPlot::EndPlot();
-
             }
-            ImGui::Checkbox("Edit", &editMode);
-            if(ImGui::Checkbox("Show Spectrum", &isSpectrum)&&isSpectrum){
-                calculateFFT();
-            }
+
+            showPlayhead();
+            ImPlot::EndPlot();
+
+
         }
 
         ImGui::End();
         ImGui::PopID();
     }
     ~SampleEditor(){
-        ImPlot::DestroyContext(imPlotContext);
+        for(int i=0;i<4;i++){
+            ImPlot::DestroyContext(imPlotContext[i]);
+        }
         delete spectrum;
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleEditor)

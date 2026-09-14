@@ -13,7 +13,7 @@ START_NAMESPACE_DISTRHO
 class AudioData
 {
 public:
-    int channels = 1;
+    std::atomic<int> channels = 1;
     const int maxChannels;
     std::vector<std::atomic<float>> sampleData[2];
     int length=0;
@@ -32,6 +32,7 @@ public:
         AudioFile<float> audioFile;
         audioFile.load ( filePath );
         int audioFileChannels = audioFile.getNumChannels();
+        channels.store(audioFileChannels, std::memory_order_relaxed);
         length=audioFile.samples[0].size();
         float temp;
         for(int i=0;i<length&&i<MAX_SAMPLE_LENGTH;i++)
@@ -50,12 +51,6 @@ public:
         }
         std::cout<<"length: "<<length<<"\n\n";
 
-    }
-    void makeMono(){
-        channels=1;
-    }
-    void makeStereo(){
-        channels=2;
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioData)
 };
@@ -182,8 +177,9 @@ inline void SamplePlaybackEngineMonophonic::run(float outputs[2]){
         stop();
         return;
     }
-    for(int i=0;i<2;i++){
-        outputs[i]=module->sample->sampleData[i][(int)playhead].load(std::memory_order_relaxed)*getReleaseValue();
+    outputs[0]=outputs[1]=module->sample->sampleData[0][(int)playhead].load(std::memory_order_relaxed)*getReleaseValue();
+    if(module->sample->channels.load(std::memory_order_relaxed)==2){
+        outputs[1]=module->sample->sampleData[1][(int)playhead].load(std::memory_order_relaxed)*getReleaseValue();
     }
     timeStep();
 }
