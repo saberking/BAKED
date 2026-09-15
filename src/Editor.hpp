@@ -34,7 +34,7 @@ public:
     char name[MAX_FILE_PATH_LENGTH];
     ImPlotSpec spec;
     bool editMode=false;
-    bool isMono=false;
+    bool isMono;
     bool isSpectrumChanged=false;
     ImPlotContext* imPlotContext[4];
     std::vector<std::complex<float>> *spectrum[2] ;
@@ -56,6 +56,7 @@ public:
 
         spectrum[0] = new std::vector<std::complex<float>>  ( MAX_SAMPLE_LENGTH );
         spectrum[1] = new std::vector<std::complex<float>>  ( MAX_SAMPLE_LENGTH );
+        isMono=(data->channels==1);
     }
 
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
@@ -93,7 +94,7 @@ public:
             axes.push_back ( 0 );
             for (int i=0; i<data->length; i++ )
             {
-                data_in[i]=std::complex<float> ( data->sampleData[0][i].load(std::memory_order_relaxed),0.f );
+                data_in[i]=std::complex<float> ( data->sampleData[j][i].load(std::memory_order_relaxed),0.f );
             }
 
             pocketfft::c2c (
@@ -240,6 +241,12 @@ public:
                         ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                     }
                     ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length/2, spec);
+                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                        if(current_pos.x>=0&&current_pos.x<data->length/2){
+                            (*spectrum[channel])[current_pos.x]=std::polar((float)current_pos.y,std::arg((*spectrum[channel])[current_pos.x]));
+                        }
+                    }
 
                 }else if(currentView==ev_waveform){
                     if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L")){
@@ -274,6 +281,12 @@ public:
                         ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                     }
                     ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length/2, spec);
+                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                        if(current_pos.x>=0&&current_pos.x<data->length/2){
+                            (*spectrum[channel])[current_pos.x]=std::polar(std::abs((*spectrum[channel])[current_pos.x]), (float)current_pos.y);
+                        }
+                    }
                 }
                 showPlayhead();
                 ImPlot::EndPlot();
