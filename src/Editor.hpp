@@ -7,6 +7,7 @@
 #include "external/implot.h"
 #include "external/implot_internal.h"
 #include "external/pocketfft_hdronly.h"
+#include "DragAndDrop.hpp"
 
 
 START_NAMESPACE_DISTRHO
@@ -16,16 +17,16 @@ struct PlotAudioContext {
     int channel;
 };
 
-enum EditorViews {
-    ev_waveform=0,
-    ev_partialAmplitude,
-    ev_partialPhase,
-    ev_count
-};
+// enum EditorViews {
+//     ev_waveform=0,
+//     ev_partialAmplitude,
+//     ev_partialPhase,
+//     ev_count
+// };
 
-const char *editorViewNames[] = {"Waveform", "Partial amplitude", "Partial phase"};
+// const char *editorViewNames[] = {"Waveform", "Partial amplitude", "Partial phase"};
 
-class SampleEditor : public DGL::ImGuiStandaloneWindow
+class SampleEditor : public DGL::ImGuiStandaloneWindow, public FileDropReceiver
 {
 public:
     AudioData *data=NULL;
@@ -35,22 +36,24 @@ public:
     ImPlotSpec spec;
     bool editMode=false;
     bool isMono;
-    ImPlotContext* imPlotContext[4];
+    ImPlotContext* imPlotContext[6];
     std::vector<std::complex<float>> *spectrum[2] ;
-    EditorViews currentView=ev_waveform;
+    //EditorViews currentView=ev_waveform;
     bool isSpectrumChanged=false;
     bool isLiveUpdate=true;
-    bool warp=false;
+    bool isWaveformChanged=false;
+    std::function<void(const char*)> fileDropped;
 
-    SampleEditor(const char *_name, Module *_module, Window& window):
+    SampleEditor(const char *_name, Module *_module, Window& window, std::function<void(const char*)> _fileDropped):
         DGL::ImGuiStandaloneWindow(window.getApp(), window) {
         strcpy(name, _name);
         module=_module;
+        fileDropped=_fileDropped;
         if(!isRelease)data=module->sample;
         spec.Flags = ImPlotFlags_CanvasOnly;
         setResizable(true);
-        setSize(900,666);
-        for(int i=0;i<4;i++){
+        setSize(1400,950);
+        for(int i=0;i<6;i++){
             imPlotContext[i]=ImPlot::CreateContext();
         }
         for(int channel=0;channel<1;channel++)
@@ -66,6 +69,12 @@ public:
         isMono=(data->channels==1);
     }
 
+    Window& getWindow() const override {
+        return DGL::ImGuiStandaloneWindow::getWindow();
+    }
+    void setDroppedFilePath(const char* path) override {
+        fileDropped(path);
+    }
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
         auto* vec_ptr = static_cast<PlotAudioContext*>(data_ptr);
         float y_val = vec_ptr->audioData->sampleData[vec_ptr->channel][idx].load(std::memory_order_relaxed);
@@ -132,7 +141,7 @@ public:
                 }
             }
         }
-
+        isWaveformChanged=false;
 
     }
 
@@ -152,7 +161,7 @@ public:
             bool forward{ pocketfft::BACKWARD };                                            // FORWARD or BACKWARD
 
             float fct{ 0.5f};    // scaling factor
-            shape_in[0]=warp?data->length-1:data->length;
+            shape_in[0]=data->length;
             pocketfft::shape_t axes;
 
             axes.push_back ( 0 );
@@ -231,29 +240,7 @@ public:
         if(!data)return;
         if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
 
-            ImGui::SetNextItemWidth(150);
-            if (ImGui::BeginCombo(" ", editorViewNames[currentView])) {
 
-                for (int n = 0; n < ev_count; n++) {
-
-                    if (ImGui::Selectable(editorViewNames[n], (currentView == n))) {
-                        EditorViews temp = static_cast<EditorViews>(n);
-                        if(currentView==ev_waveform){
-                            if(temp!=currentView)calculateFFT();
-                        }else {
-                            if(temp==ev_waveform)calculateWaveform();
-                        }
-                        currentView=temp;
-                    }
-
-                    if (currentView == n) {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-
-                ImGui::EndCombo();
-            }
-            ImGui::SameLine();
             if(ImGui::Checkbox("Mono", &isMono)){
                 if(isMono)data->channels.store(1, std::memory_order_relaxed);
                 else data->channels.store(2, std::memory_order_relaxed);
@@ -261,59 +248,29 @@ public:
             ImGui::SameLine();
             ImGui::Checkbox("Edit", &editMode);
 
-            if(currentView!=ev_waveform&&editMode)
-            {   //ImGui::SameLine();
-                //ImGui::Checkbox("Warp", &warp);
+            if(editMode)
+            {
                 ImGui::SameLine();
                 ImGui::Checkbox("Live update", &isLiveUpdate);
 
-                if(!isLiveUpdate&&isSpectrumChanged)
+                if(!isLiveUpdate&&(isSpectrumChanged||isWaveformChanged))
                 {
                     ImGui::SameLine();
                     if(ImGui::Button("Apply changes"))
                     {
-                        calculateWaveform();
+                        if(isSpectrumChanged)calculateWaveform();
+                        if(isWaveformChanged)calculateFFT();
                     }
                 }
             }
 
 
+            if (ImGui::BeginTable("My2ColumnTable", isMono?1:2))
+            {
+                for(int channel=0;channel<1||!isMono&&channel<2;channel++){
+                    ImGui::TableNextColumn();
 
-            for(int channel=0;channel<1||!isMono&&channel<2;channel++){
-                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
-
-                if(currentView==ev_partialAmplitude){
-                    if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L")){
-                        setInputMap();
-                        ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.0, ImPlotCond_Always);
-                        ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
-
-                        // Allow the X-axis to scroll and zoom normally
-                        ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
-                        ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
-                    }
-                    ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length/2, spec);
-                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
-                        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-                        if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH/2-1){
-                            (*spectrum[channel])[current_pos.x]=std::polar(
-                                current_pos.y>0?(float)current_pos.y:0.f,
-                                (float)(
-                                    std::abs((*spectrum[channel])[current_pos.x])?std::arg((*spectrum[channel])[current_pos.x]):-M_PI/2
-                                )
-                            );
-                            isSpectrumChanged=true;
-                            if(data->length<(int)current_pos.x*2+2){
-                                data->length=(int)current_pos.x*2+2;
-                                (*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
-                            }
-                            if(isLiveUpdate)calculateWaveform();
-
-                        }
-                    }
-
-                }else if(currentView==ev_waveform){
+                    ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
                     if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L")){
                         setInputMap();
 
@@ -326,18 +283,66 @@ public:
                         PlotAudioContext plotAudioContext { data, channel };
                         ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &plotAudioContext, data->length, spec);
                         if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                            if(isSpectrumChanged)calculateWaveform();
                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
                             if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH){
                                 data->sampleData[channel][current_pos.x].store(clip(current_pos.y));
                                 if(data->length<(int)current_pos.x+1){
                                     data->length=(int)current_pos.x+1;
                                 }
+                                isWaveformChanged=true;
+                                if(isLiveUpdate)calculateFFT();
                             }
                         }
                         showPlayhead();
+                        ImPlot::EndPlot();
 
                     }
-                }else{
+                }
+
+                for(int channel=0;channel<1||!isMono&&channel<2;channel++){
+                    ImGui::TableNextColumn();
+
+                    ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+
+                    if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L")){
+                        setInputMap();
+                        ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.0, ImPlotCond_Always);
+                        ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
+
+                        // Allow the X-axis to scroll and zoom normally
+                        ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
+                        ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 100.f, ImPlotCond_Once);
+                        ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length/2, spec);
+                        if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                            if(isWaveformChanged)calculateFFT();
+                            ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                            if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH/2-1){
+                                (*spectrum[channel])[current_pos.x]=std::polar(
+                                    current_pos.y>0?(float)current_pos.y:0.f,
+                                    (float)(
+                                        std::abs((*spectrum[channel])[current_pos.x])?std::arg((*spectrum[channel])[current_pos.x]):-M_PI/2
+                                        )
+                                    );
+                                isSpectrumChanged=true;
+                                if(data->length<(int)current_pos.x*2+2){
+                                    data->length=(int)current_pos.x*2+2;
+                                    (*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
+                                }
+                                if(isLiveUpdate)calculateWaveform();
+
+                            }
+                        }
+                        ImPlot::EndPlot();
+                    }
+
+                }
+
+                for(int channel=0;channel<1||!isMono&&channel<2;channel++){
+                    ImGui::TableNextColumn();
+
+                    ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
                     if (ImPlot::BeginPlot(channel?"Phase R":"Phase L")){
                         setInputMap();
                         ImPlot::SetupAxis(ImAxis_Y1, "Phase", ImPlotAxisFlags_Lock);
@@ -345,20 +350,27 @@ public:
 
                         // Allow the X-axis to scroll and zoom normally
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
-                        ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
-                    }
-                    ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length/2, spec);
-                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
-                        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-                        if(current_pos.x>=0&&current_pos.x<data->length/2&&std::abs((*spectrum[channel])[current_pos.x])){
-                            (*spectrum[channel])[current_pos.x]=std::polar(std::abs((*spectrum[channel])[current_pos.x]), (float)(std::max(current_pos.y,0.d)-M_PI/2));
-                            isSpectrumChanged=true;
-                            if(isLiveUpdate)calculateWaveform();
+                        ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 100.f, ImPlotCond_Once);
+                        ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length/2, spec);
+                        if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                            if(isWaveformChanged)calculateFFT();
+
+                            ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                            if(current_pos.x>=0&&current_pos.x<data->length/2&&std::abs((*spectrum[channel])[current_pos.x])){
+                                (*spectrum[channel])[current_pos.x]=std::polar(std::abs((*spectrum[channel])[current_pos.x]), (float)(std::max(current_pos.y,0.d)-M_PI/2));
+                                isSpectrumChanged=true;
+                                if(isLiveUpdate)calculateWaveform();
+                            }
                         }
+
                     }
+                    ImPlot::EndPlot();
+
                 }
-                ImPlot::EndPlot();
+                ImGui::EndTable();
+
             }
+
         }
 
         ImGui::End();

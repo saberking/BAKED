@@ -52,11 +52,11 @@ public:
         if (isResizable())
             fResizeHandle.hide();
         oleDropTarget=new MyOleDropTarget(this);
-        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow());
-        if (editor) {
-            editor->show();
-        }
+        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow(), [this](const char* path) {
+            this->setDroppedFilePath(path);
+        });
 
+        editor->show();
     }
 
     void stateChanged(const char* key, const char* value){
@@ -129,7 +129,7 @@ protected:
 
         if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize))
         {
-            ImGui::Text("File Status: %s", sampleFilePath);
+            ImGui::Text("Filepath: %s", sampleFilePath);
             // if (ImGui::CollapsingHeader("Sample Editor"))
             // {
             //     ImGui::Indent();
@@ -137,7 +137,10 @@ protected:
 
             //     ImGui::Unindent();
             // }
-
+            if (!editor->isVisible()&&ImGui::Button("Edit sample"))
+            {
+                editor->show();
+            }
             ImGui::Separator();
             ImGui::Spacing();
 
