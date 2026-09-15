@@ -16,6 +16,15 @@ struct PlotAudioContext {
     int channel;
 };
 
+enum EditorViews {
+    ev_waveform=0,
+    ev_partialAmplitude,
+    ev_partialPhase,
+    ev_count
+};
+
+const char *editorViewNames[] = {"Waveform", "Partial amplitude", "Partial phase"};
+
 class SampleEditor : public DGL::ImGuiStandaloneWindow
 {
 public:
@@ -25,12 +34,12 @@ public:
     char name[MAX_FILE_PATH_LENGTH];
     ImPlotSpec spec;
     bool editMode=false;
-    bool isSpectrum=false;
     bool isMono=false;
     bool isSpectrumChanged=false;
     ImPlotContext* imPlotContext[4];
     std::vector<std::complex<float>> *spectrum ;
     bool spectrumReady=false;
+    EditorViews currentView=ev_waveform;
 
 
     SampleEditor(const char *_name, Module *_module, Window& window):
@@ -40,6 +49,7 @@ public:
         if(!isRelease)data=module->sample;
         spec.Flags = ImPlotFlags_CanvasOnly;
         setResizable(true);
+        setSize(1000,800);
         for(int i=0;i<4;i++){
             imPlotContext[i]=ImPlot::CreateContext();
         }
@@ -57,6 +67,12 @@ public:
     static ImPlotPoint SpectrumGetter(int idx, void* data_ptr){
         auto* vec_ptr = static_cast<std::vector<std::complex<float>>*>(data_ptr);
         float y_val = std::abs((*vec_ptr)[idx]);
+        return ImPlotPoint(idx, y_val);
+    }
+
+    static ImPlotPoint PhaseGetter(int idx, void* data_ptr){
+        auto* vec_ptr = static_cast<std::vector<std::complex<float>>*>(data_ptr);
+        float y_val = std::arg((*vec_ptr)[idx]);
         return ImPlotPoint(idx, y_val);
     }
 
@@ -144,19 +160,36 @@ public:
                 else data->channels.store(2, std::memory_order_relaxed);
             }
 
-            if(ImGui::Checkbox("Show Spectrum", &isSpectrum)){
-                if(isSpectrum)calculateFFT();
-                else if (isSpectrumChanged)calculateWaveform();
+            if (ImGui::BeginCombo("View mode", editorViewNames[currentView])) {
+
+                for (int n = 0; n < ev_count; n++) {
+                    bool isSelected = (currentView == n);
+
+                    if (ImGui::Selectable(editorViewNames[n], isSelected)) {
+                        currentView = static_cast<DISTRHO::EditorViews>(n);
+                        if(currentView!=ev_waveform){
+                            calculateFFT();
+                        }
+                    }
+
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+
+                ImGui::EndCombo();
             }
+
             ImGui::Checkbox("Edit", &editMode);
 
             for(int channel=0;channel<1||!isMono&&channel<2;channel++){
-                if(isSpectrum){
-                    ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+
+                if(currentView==ev_partialAmplitude){
                     if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L")){
                         setInputMap();
                         ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 1.0, ImPlotCond_Always);
 
                         // Allow the X-axis to scroll and zoom normally
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
@@ -164,8 +197,7 @@ public:
                     }
                     ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum, data->length/2, spec);
 
-                }else{
-                    ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+                }else if(currentView==ev_waveform){
                     if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L")){
                         setInputMap();
 
@@ -187,6 +219,17 @@ public:
                             }
                         }
                     }
+                }else{
+                    if (ImPlot::BeginPlot(channel?"Phase R":"Phase L")){
+                        setInputMap();
+                        ImPlot::SetupAxis(ImAxis_Y1, "Phase", ImPlotAxisFlags_Lock);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, -M_PI,M_PI, ImPlotCond_Always);
+
+                        // Allow the X-axis to scroll and zoom normally
+                        ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
+                        ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
+                    }
+                    ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum, data->length/2, spec);
                 }
                 showPlayhead();
                 ImPlot::EndPlot();
