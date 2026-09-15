@@ -214,7 +214,10 @@ public:
     }
 
 
-
+    float clip(float input)
+    {
+        return std::max(-1.f,std::min(1.f,input));
+    }
 
 
     void onImGuiDisplay() override{
@@ -315,7 +318,7 @@ public:
                         setInputMap();
 
                         ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
 
                         // Allow the X-axis to scroll and zoom normally
                         ImPlot::SetupAxis(ImAxis_X1, "Sample", ImPlotAxisFlags_None);
@@ -325,7 +328,7 @@ public:
                         if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
                             if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH){
-                                data->sampleData[channel][current_pos.x].store(current_pos.y);
+                                data->sampleData[channel][current_pos.x].store(clip(current_pos.y));
                                 if(data->length<(int)current_pos.x+1){
                                     data->length=(int)current_pos.x+1;
                                 }
