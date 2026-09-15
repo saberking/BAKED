@@ -34,6 +34,7 @@ class ImGuiPluginUI : public UI, public FileDropReceiver
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
     SampleEditor *editor=NULL;
     MyOleDropTarget *oleDropTarget=NULL;
+    bool editorWasOpen=true;
 public:
 
     ImGuiPluginUI()
@@ -117,6 +118,7 @@ protected:
     }
 
     void onImGuiDisplay() override {
+
 
         const float width = getWidth();
         const float height = getHeight();
