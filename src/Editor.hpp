@@ -81,8 +81,12 @@ public:
 
     static ImPlotPoint PhaseGetter(int idx, void* data_ptr){
         auto* vec_ptr = static_cast<std::vector<std::complex<float>>*>(data_ptr);
-        float y_val = std::arg((*vec_ptr)[idx])+M_PI/2;
-        if(y_val>=M_PI)y_val-=2*M_PI;
+        float y_val = std::arg((*vec_ptr)[idx])+M_PI/2+0.000001;
+        if(y_val<0)
+        {
+            y_val+=2*M_PI;
+            //std::cout<<"idx"<<idx<<std::endl<<"yval"<<y_val<<std::endl<<"abs"<<std::abs((*vec_ptr)[idx])<<std::endl;
+        }
         if(std::abs((*vec_ptr)[idx])==0)y_val=-999.f;
         return ImPlotPoint(idx, y_val);
     }
@@ -202,11 +206,11 @@ public:
         }
     }
     static inline double TransformForward_Sqrt(double v, void*) {
-        return (v < 0.0) ? 0.0 : std::sqrt(v);
+        return  std::cbrt(v);
     }
 
     static inline double TransformInverse_Sqrt(double v, void*) {
-        return v * v;
+        return v * v*v;
     }
 
 
@@ -279,24 +283,27 @@ public:
                     if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L")){
                         setInputMap();
                         ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 1.0, ImPlotCond_Always);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.0, ImPlotCond_Always);
                         ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
                         // Allow the X-axis to scroll and zoom normally
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
                         ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                     }
-                    ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length/2+1, spec);
+                    ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length/2, spec);
                     if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
                         ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
                         if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH/2-1){
-                            (*spectrum[channel])[current_pos.x]=std::polar((float)current_pos.y,
-                                        (float)(std::abs((*spectrum[channel])[current_pos.x])?
-                                                    std::arg((*spectrum[channel])[current_pos.x]):-M_PI/2));
+                            (*spectrum[channel])[current_pos.x]=std::polar(
+                                current_pos.y>0?(float)current_pos.y:0.f,
+                                (float)(
+                                    std::abs((*spectrum[channel])[current_pos.x])?std::arg((*spectrum[channel])[current_pos.x]):-M_PI/2
+                                )
+                            );
                             isSpectrumChanged=true;
-                            if(data->length<(int)current_pos.x*2+1){
-                                data->length=(int)current_pos.x*2+1;
-                                //(*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
+                            if(data->length<(int)current_pos.x*2+2){
+                                data->length=(int)current_pos.x*2+2;
+                                (*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
                             }
                             if(isLiveUpdate)calculateWaveform();
 
@@ -324,28 +331,29 @@ public:
                                 }
                             }
                         }
+                        showPlayhead();
+
                     }
                 }else{
                     if (ImPlot::BeginPlot(channel?"Phase R":"Phase L")){
                         setInputMap();
                         ImPlot::SetupAxis(ImAxis_Y1, "Phase", ImPlotAxisFlags_Lock);
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, -M_PI,M_PI, ImPlotCond_Always);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
 
                         // Allow the X-axis to scroll and zoom normally
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
                         ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                     }
-                    ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length/2+1, spec);
+                    ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length/2, spec);
                     if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
                         ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-                        if(current_pos.x>=0&&current_pos.x<data->length/2+1&&std::abs((*spectrum[channel])[current_pos.x])){
-                            (*spectrum[channel])[current_pos.x]=std::polar(std::abs((*spectrum[channel])[current_pos.x]), (float)(current_pos.y-M_PI/2));
+                        if(current_pos.x>=0&&current_pos.x<data->length/2&&std::abs((*spectrum[channel])[current_pos.x])){
+                            (*spectrum[channel])[current_pos.x]=std::polar(std::abs((*spectrum[channel])[current_pos.x]), (float)(std::max(current_pos.y,0.d)-M_PI/2));
                             isSpectrumChanged=true;
                             if(isLiveUpdate)calculateWaveform();
                         }
                     }
                 }
-                showPlayhead();
                 ImPlot::EndPlot();
             }
         }
