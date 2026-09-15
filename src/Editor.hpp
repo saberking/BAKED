@@ -37,7 +37,7 @@ public:
     bool isMono=false;
     bool isSpectrumChanged=false;
     ImPlotContext* imPlotContext[4];
-    std::vector<std::complex<float>> *spectrum ;
+    std::vector<std::complex<float>> *spectrum[2] ;
     bool spectrumReady=false;
     EditorViews currentView=ev_waveform;
 
@@ -49,12 +49,13 @@ public:
         if(!isRelease)data=module->sample;
         spec.Flags = ImPlotFlags_CanvasOnly;
         setResizable(true);
-        setSize(1000,800);
+        setSize(900,666);
         for(int i=0;i<4;i++){
             imPlotContext[i]=ImPlot::CreateContext();
         }
 
-        spectrum = new std::vector<std::complex<float>>  ( MAX_SAMPLE_LENGTH );
+        spectrum[0] = new std::vector<std::complex<float>>  ( MAX_SAMPLE_LENGTH );
+        spectrum[1] = new std::vector<std::complex<float>>  ( MAX_SAMPLE_LENGTH );
     }
 
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
@@ -77,41 +78,81 @@ public:
     }
 
     void calculateFFT(){
-        std::vector<std::complex<float>> data_in ( data->length );
-        pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
-        pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
-        pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
-        stride_in[0]=stride_out[0]=sizeof ( std::complex<float> );
-        //  pocketfft::shape_t axes{1};                                                  // 0 to shape.size()-1 inclusive
-        bool forward{ pocketfft::FORWARD };                                            // FORWARD or BACKWARD
-        // input data (reals)
-        // output data (FFT(input))
-        float fct{ 1.0f /data->length};    // scaling factor
-        shape_in[0]=data->length;
-        pocketfft::shape_t axes;
+        for(int j=0;j<data->maxChannels;j++){
+            std::vector<std::complex<float>> data_in ( data->length );
+            pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
+            pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
+            pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
+            stride_in[0]=stride_out[0]=sizeof ( std::complex<float> );
+            bool forward{ pocketfft::FORWARD };                                            // FORWARD or BACKWARD
 
-        axes.push_back ( 0 );
-        int i;
-        for ( i=0; i<data->length; i++ )
-        {
-            data_in[i]=std::complex<float> ( data->sampleData[0][i].load(std::memory_order_relaxed),0.f );
+            float fct{ 2.0f /data->length};    // scaling factor
+            shape_in[0]=data->length;
+            pocketfft::shape_t axes;
+
+            axes.push_back ( 0 );
+            for (int i=0; i<data->length; i++ )
+            {
+                data_in[i]=std::complex<float> ( data->sampleData[0][i].load(std::memory_order_relaxed),0.f );
+            }
+
+            pocketfft::c2c (
+                shape_in,
+                stride_in,
+                stride_out,
+                axes,
+                forward,
+                data_in.data(),
+                spectrum[j]->data(),
+                fct
+                );
+            spectrumReady=true;
         }
-        // while(i<MAX_SAMPLE_LENGTH){
-        //     data_in[i++]=std::polar<float> ( 0.f, 0.f );
-        // }
+
+    }
+
+    void calculateWaveform(){
+        std::vector<float> *waveform[2] ;
+
+        for(int j=0;j<data->maxChannels;j++){
+            waveform[j] = new std::vector<float> ( MAX_SAMPLE_LENGTH );
+
+            std::vector<std::complex<float>> data_in ( data->length/2+1 );
+            pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
+            pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
+            pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
+            stride_in[0]=sizeof ( std::complex<float> );
+            stride_out[0]=sizeof ( float );
+
+            bool forward{ pocketfft::BACKWARD };                                            // FORWARD or BACKWARD
+
+            float fct{ 0.5f};    // scaling factor
+            shape_in[0]=data->length;
+            pocketfft::shape_t axes;
+
+            axes.push_back ( 0 );
+            for (int i=0; i<data->length/2; i++ )
+            {
+                data_in[i]= (*spectrum[j])[i] ;
+            }
 
 
-        pocketfft::c2c (
-            shape_in,
-            stride_in,
-            stride_out,
-            axes,
-            forward,
-            data_in.data(),
-            spectrum->data(),
-            fct
-            );
-        spectrumReady=true;
+            pocketfft::c2r (
+                shape_in,
+                stride_in,
+                stride_out,
+                axes,
+                forward,
+                data_in.data(),
+                waveform[j]->data(),
+                fct
+                );
+            for(int k=0;k<data->length;k++){
+                data->sampleData[j][k].store((*waveform[j])[k]);
+            }
+            delete waveform[j];
+        }
+
     }
 
     void setInputMap(){
@@ -143,7 +184,6 @@ public:
 
     }
 
-    void calculateWaveform(){}
 
     void onImGuiDisplay() override{
 
@@ -155,12 +195,9 @@ public:
 
         if(!data)return;
         if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
-            if(ImGui::Checkbox("Mono", &isMono)){
-                if(isMono)data->channels.store(1, std::memory_order_relaxed);
-                else data->channels.store(2, std::memory_order_relaxed);
-            }
 
-            if (ImGui::BeginCombo("View mode", editorViewNames[currentView])) {
+            ImGui::SetNextItemWidth(150);
+            if (ImGui::BeginCombo(" ", editorViewNames[currentView])) {
 
                 for (int n = 0; n < ev_count; n++) {
                     bool isSelected = (currentView == n);
@@ -169,6 +206,8 @@ public:
                         currentView = static_cast<DISTRHO::EditorViews>(n);
                         if(currentView!=ev_waveform){
                             calculateFFT();
+                        }else{
+                            calculateWaveform();
                         }
                     }
 
@@ -179,7 +218,12 @@ public:
 
                 ImGui::EndCombo();
             }
-
+            ImGui::SameLine();
+            if(ImGui::Checkbox("Mono", &isMono)){
+                if(isMono)data->channels.store(1, std::memory_order_relaxed);
+                else data->channels.store(2, std::memory_order_relaxed);
+            }
+            ImGui::SameLine();
             ImGui::Checkbox("Edit", &editMode);
 
             for(int channel=0;channel<1||!isMono&&channel<2;channel++){
@@ -195,7 +239,7 @@ public:
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
                         ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                     }
-                    ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum, data->length/2, spec);
+                    ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length/2, spec);
 
                 }else if(currentView==ev_waveform){
                     if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L")){
@@ -229,7 +273,7 @@ public:
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
                         ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                     }
-                    ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum, data->length/2, spec);
+                    ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length/2, spec);
                 }
                 showPlayhead();
                 ImPlot::EndPlot();
@@ -243,7 +287,7 @@ public:
         for(int i=0;i<4;i++){
             ImPlot::DestroyContext(imPlotContext[i]);
         }
-        delete spectrum;
+        delete spectrum[0];delete spectrum[1];
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleEditor)
 
