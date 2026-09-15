@@ -29,10 +29,15 @@ public:
     }
     void loadWavFile ( const char *filePath)
     {
+
         AudioFile<float> audioFile;
-        audioFile.load ( filePath );
+        if(!audioFile.load ( filePath )){
+            std::cout<<"ERRRRRRRRRRRR"<<std::endl;
+            return;
+        }
         int audioFileChannels = audioFile.getNumChannels();
         channels.store(audioFileChannels, std::memory_order_relaxed);
+        std::cout<<"stored channels"<<std::endl;
         length=audioFile.samples[0].size();
         float temp;
         for(int i=0;i<length&&i<MAX_SAMPLE_LENGTH;i++)
