@@ -35,11 +35,10 @@ public:
     ImPlotSpec spec;
     bool editMode=false;
     bool isMono;
-    bool isSpectrumChanged=false;
     ImPlotContext* imPlotContext[4];
     std::vector<std::complex<float>> *spectrum[2] ;
-    bool spectrumReady=false;
     EditorViews currentView=ev_waveform;
+    bool isWindowOpen =true;
 
 
     SampleEditor(const char *_name, Module *_module, Window& window):
@@ -107,7 +106,6 @@ public:
                 spectrum[j]->data(),
                 fct
                 );
-            spectrumReady=true;
         }
 
     }
@@ -201,18 +199,18 @@ public:
             if (ImGui::BeginCombo(" ", editorViewNames[currentView])) {
 
                 for (int n = 0; n < ev_count; n++) {
-                    bool isSelected = (currentView == n);
 
-                    if (ImGui::Selectable(editorViewNames[n], isSelected)) {
-                        currentView = static_cast<DISTRHO::EditorViews>(n);
-                        if(currentView!=ev_waveform){
-                            calculateFFT();
-                        }else{
-                            calculateWaveform();
+                    if (ImGui::Selectable(editorViewNames[n], (currentView == n))) {
+                        EditorViews temp = static_cast<EditorViews>(n);
+                        if(currentView==ev_waveform){
+                            if(temp!=currentView)calculateFFT();
+                        }else {
+                            if(temp!=currentView)calculateWaveform();
                         }
+                        currentView=temp;
                     }
 
-                    if (isSelected) {
+                    if (currentView == n) {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -295,6 +293,7 @@ public:
 
         ImGui::End();
         ImGui::PopID();
+
     }
     ~SampleEditor(){
         for(int i=0;i<4;i++){

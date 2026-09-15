@@ -71,6 +71,8 @@ public:
         getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
         setState("sampleFilePath" ,path);
         strcpy(sampleFilePath, path);
+        editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels==1);
+        editor->calculateFFT();
     }
 
     Window& getWindow() const override {
