@@ -1,0 +1,378 @@
+diff --git a/dpf b/dpf
+--- a/dpf
++++ b/dpf
+@@ -1 +1 @@
+-Subproject commit d849424c9cdaf85cd12cce07307a4d92ae2d7b34
++Subproject commit d849424c9cdaf85cd12cce07307a4d92ae2d7b34-dirty
+diff --git a/src/Editor.hpp b/src/Editor.hpp
+index f428799..ab665c5 100644
+--- a/src/Editor.hpp
++++ b/src/Editor.hpp
+@@ -27,9 +27,9 @@ public:
+     bool isMono;
+     ImPlotContext* imPlotContext[6];
+     std::vector<std::complex<float>> *spectrum[2] ;
+-    bool isSpectrumChanged=false;
++    bool isSpectrumChanged[2];
+     bool isLiveUpdate=true;
+-    bool isWaveformChanged=false;
++    bool isWaveformChanged[2];
+     std::function<void(const char*)> fileDropped;
+     std::function<void()> setDirty;
+     int length;
+@@ -60,8 +60,12 @@ public:
+             }
+ 
+         }
+-        calculateFFT();
+         isMono=(data->channels.load()==1);
++        isSpectrumChanged[0]=isSpectrumChanged[1]=false;
++        for(int channel=0;channel<data->length.load(std::memory_order_relaxed);channel++)
++        {
++            calculateFFT(channel);
++        }
+     }
+ 
+     Window& getWindow() const override {
+@@ -95,107 +99,99 @@ public:
+         return ImPlotPoint(idx, y_val);
+     }
+ 
+-    void calculateFFT(){
+-        for(int j=0;j<data->maxChannels;j++){
+-            //std::vector<std::complex<float>> data_in ( data->length );
+-            std::vector<float> data_in ( data->length.load(std::memory_order_relaxed) );
+-            pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
+-            pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
+-            pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
+-            //stride_in[0]=stride_out[0]=sizeof ( std::complex<float> );
+-            stride_in[0]=sizeof ( float );
+-            stride_out[0]=sizeof ( std::complex<float> );
+-            bool forward{ pocketfft::FORWARD };                                            // FORWARD or BACKWARD
+-
+-            float fct{ 2.0f /data->length.load(std::memory_order_relaxed)};    // scaling factor
+-            shape_in[0]=data->length.load(std::memory_order_relaxed);
+-            pocketfft::shape_t axes;
+-
+-            axes.push_back ( 0 );
+-            for (int i=0; i<data->length.load(std::memory_order_relaxed); i++ )
+-            {
+-                //data_in[i]=std::complex<float> ( data->sampleData[j][i].load(std::memory_order_relaxed),0.f );
+-                data_in[i]=data->sampleData[j][i].load(std::memory_order_relaxed);
+-            }
++    void calculateFFT(int j){
++        //std::vector<std::complex<float>> data_in ( data->length );
++        std::vector<float> data_in ( data->length.load(std::memory_order_relaxed) );
++        pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
++        pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
++        pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
++        //stride_in[0]=stride_out[0]=sizeof ( std::complex<float> );
++        stride_in[0]=sizeof ( float );
++        stride_out[0]=sizeof ( std::complex<float> );
++        bool forward{ pocketfft::FORWARD };                                            // FORWARD or BACKWARD
++
++        float fct{ 2.0f /data->length.load(std::memory_order_relaxed)};    // scaling factor
++        shape_in[0]=data->length.load(std::memory_order_relaxed);
++        pocketfft::shape_t axes;
++
++        axes.push_back ( 0 );
++        for (int i=0; i<data->length.load(std::memory_order_relaxed); i++ )
++        {
++            //data_in[i]=std::complex<float> ( data->sampleData[j][i].load(std::memory_order_relaxed),0.f );
++            data_in[i]=data->sampleData[j][i].load(std::memory_order_relaxed);
++        }
+ 
+-            pocketfft::r2c (
+-                shape_in,
+-                stride_in,
+-                stride_out,
+-                axes,
+-                forward,
+-                data_in.data(),
+-                spectrum[j]->data(),
+-                fct
+-                );
+-            for(int i=0;i<data->length.load(std::memory_order_relaxed)/2;i++)
++        pocketfft::r2c (
++            shape_in,
++            stride_in,
++            stride_out,
++            axes,
++            forward,
++            data_in.data(),
++            spectrum[j]->data(),
++            fct
++            );
++        for(int i=0;i<data->length.load(std::memory_order_relaxed)/2;i++)
++        {
++            if(std::abs((*spectrum[j])[i])<0.000001)
+             {
+-                if(std::abs((*spectrum[j])[i])<0.000001)
+-                {
+-                    (*spectrum[j])[i]=std::complex(0.f,0.f);
+-                }
++                (*spectrum[j])[i]=std::complex(0.f,0.f);
+             }
+         }
+-        isWaveformChanged=false;
++        isWaveformChanged[j]=false;
+ 
+     }
+ 
+-    void calculateWaveform(){
+-        std::vector<float> *waveform[2] ;
++    void calculateWaveform(int j){
++        std::vector<float> waveform  ( MAX_SAMPLE_LENGTH );
+ 
+-        for(int j=0;j<data->maxChannels;j++){
+-            waveform[j] = new std::vector<float> ( MAX_SAMPLE_LENGTH );
+ 
+-            std::vector<std::complex<float>> data_in ( data->length.load(std::memory_order_relaxed)/2+1 );
+-            pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
+-            pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
+-            pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
+-            stride_in[0]=sizeof ( std::complex<float> );
+-            stride_out[0]=sizeof ( float );
+ 
+-            bool forward{ pocketfft::BACKWARD };                                            // FORWARD or BACKWARD
++        std::vector<std::complex<float>> data_in ( data->length.load(std::memory_order_relaxed)/2+1 );
++        pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
++        pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
++        pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
++        stride_in[0]=sizeof ( std::complex<float> );
++        stride_out[0]=sizeof ( float );
+ 
+-            float fct{ 0.5f};    // scaling factor
+-            shape_in[0]=data->length.load(std::memory_order_relaxed);
+-            pocketfft::shape_t axes;
++        bool forward{ pocketfft::BACKWARD };                                            // FORWARD or BACKWARD
+ 
+-            axes.push_back ( 0 );
+-            for (int i=0; i<data->length.load(std::memory_order_relaxed)/2+1; i++ )
+-            {
+-                data_in[i]= (*spectrum[j])[i] ;
+-            }
++        float fct{ 0.5f};    // scaling factor
++        shape_in[0]=data->length.load(std::memory_order_relaxed);
++        pocketfft::shape_t axes;
++
++        axes.push_back ( 0 );
++        for (int i=0; i<data->length.load(std::memory_order_relaxed)/2+1; i++ )
++        {
++            data_in[i]= (*spectrum[j])[i] ;
++        }
+ 
+ 
+-            pocketfft::c2r (
+-                shape_in,
+-                stride_in,
+-                stride_out,
+-                axes,
+-                forward,
+-                data_in.data(),
+-                waveform[j]->data(),
+-                fct
+-                );
++        pocketfft::c2r (
++            shape_in,
++            stride_in,
++            stride_out,
++            axes,
++            forward,
++            data_in.data(),
++            waveform.data(),
++            fct
++            );
+ 
++        float maxVal=1;
++        for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
++            (std::abs(waveform[k])>maxVal)&&(maxVal=std::abs(waveform[k]));
+         }
+-        bool normalise=false;
+-        for(int j=0;j<data->maxChannels;j++){
+-            float maxVal=1;
+-            for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
+-                (std::abs((*waveform[j])[k])>maxVal)&&(maxVal=std::abs((*waveform[j])[k]));
+-            }
+-            if(maxVal>1)normalise=true;
+-            float multiplier=1/maxVal;
+-            for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
+-                data->sampleData[j][k].store((*waveform[j])[k]*multiplier);
+-            }
+-            delete waveform[j];
++        float multiplier=1/maxVal;
++        for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
++            data->sampleData[j][k].store(waveform[k]*multiplier);
+         }
+-        if(normalise)
++
++        if(maxVal>1)
+         {
+-            calculateFFT();
++            calculateFFT(j);
+         }
+-        isSpectrumChanged=false;
++        isSpectrumChanged[j]=false;
+         setDirty();
+ 
+     }
+@@ -241,7 +237,7 @@ public:
+     void setWaveformSample(int channel, int x, float y)
+     {
+         data->sampleData[channel][x].store(clip(y));
+-        isWaveformChanged=true;
++        isWaveformChanged[channel]=true;
+         setDirty();
+     }
+ 
+@@ -251,7 +247,7 @@ public:
+             (float)std::max(y,0.f),
+             (float)(std::abs((*spectrum[channel])[x])?std::arg((*spectrum[channel])[x]):-M_PI/2)
+             );
+-        isSpectrumChanged=true;
++        isSpectrumChanged[channel]=true;
+     }
+ 
+     void setSpectrumPhase(int channel, int x, float y)
+@@ -260,7 +256,7 @@ public:
+             std::abs((*spectrum[channel])[x]),
+             (float)(std::max(y,0.f)-M_PI/2)
+             );
+-        isSpectrumChanged=true;
++        isSpectrumChanged[channel]=true;
+     }
+ 
+     void handleDrag(int channel, int x, float y, std::function<void(int, int, float)> callback)
+@@ -306,19 +302,37 @@ public:
+                 {
+                     if(isLiveUpdate)
+                     {
+-                        if(isSpectrumChanged)calculateWaveform();
+-                        if(isWaveformChanged)calculateFFT();
++                        for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
++                        {
++
++                            if(isSpectrumChanged[j])calculateWaveform(j);
++                            if(isWaveformChanged[j])calculateFFT(j);
++                        }
+                     }
+                 }
+-                if(!isLiveUpdate&&(isSpectrumChanged||isWaveformChanged))
++                if(!isLiveUpdate)
+                 {
+-                    ImGui::SameLine();
+-                    if(ImGui::Button("Apply changes"))
++                    bool showUpdateButton=false;
++                    for(int j=0;j<data->channels.load(std::memory_order_relaxed);j++)
+                     {
+-                        if(isSpectrumChanged)calculateWaveform();
+-                        if(isWaveformChanged)calculateFFT();
++                        showUpdateButton=showUpdateButton||isSpectrumChanged[j]||isWaveformChanged[j];
++                    }
++
++                    if(showUpdateButton)
++                    {
++                        ImGui::SameLine();
++                        if(ImGui::Button("Apply changes"))
++                        {
++                            for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
++                            {
++
++                                if(isSpectrumChanged[j])calculateWaveform(j);
++                                if(isWaveformChanged[j])calculateFFT(j);
++                            }
++                        }
+                     }
+                 }
++
+                 float tempLength=length;
+                 ImGui::SliderFloat ("Length",&tempLength, 0,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
+                 length=(int)tempLength;
+@@ -326,11 +340,13 @@ public:
+                 {
+                     data->length.store(length, std::memory_order_relaxed);
+                     setDirty();
+-                    isWaveformChanged=true;
+-                    if(isLiveUpdate)
++                    for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
+                     {
+-                        calculateFFT();
++                        isWaveformChanged[j]=true;
++                        if(isLiveUpdate) calculateFFT(j);
++
+                     }
++
+                 }
+ 
+             }
+@@ -354,7 +370,7 @@ public:
+                         PlotAudioContext plotAudioContext { data, channel };
+                         ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &plotAudioContext, data->length.load(std::memory_order_relaxed), spec);
+                         if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+-                            if(isSpectrumChanged)calculateWaveform();
++                            if(isSpectrumChanged[channel])calculateWaveform(channel);
+                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                             if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH){
+                                 setWaveformSample(channel, current_pos.x, current_pos.y);
+@@ -366,7 +382,7 @@ public:
+                                 channel, std::max(-1,std::min(MAX_SAMPLE_LENGTH,(int)current_pos.x)),current_pos.y,
+                                 [this](int channel, int x, float y){this->setWaveformSample(channel,x,y);}
+                                 );
+-                            if(isLiveUpdate&&isWaveformChanged)calculateFFT();
++                            if(isLiveUpdate&&isWaveformChanged[channel])calculateFFT(channel);
+                         }
+                         showPlayhead();
+                         ImPlot::EndPlot();
+@@ -390,7 +406,7 @@ public:
+                         ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 100.f, ImPlotCond_Once);
+                         ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2, spec);
+                         if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+-                            if(isWaveformChanged)calculateFFT();
++                            if(isWaveformChanged[channel])calculateFFT(channel);
+                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                             if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH/2-1){
+                                 setSpectrumAmplitude(channel,current_pos.x,current_pos.y);
+@@ -404,7 +420,7 @@ public:
+                                 [this](int channel, int x, float y){this->setSpectrumAmplitude(channel,x,y);}
+                                 );
+ 
+-                            if(isLiveUpdate&&isSpectrumChanged)calculateWaveform();
++                            if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
+                         }
+                         ImPlot::EndPlot();
+                     }
+@@ -425,7 +441,7 @@ public:
+                         ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 100.f, ImPlotCond_Once);
+                         ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2, spec);
+                         if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+-                            if(isWaveformChanged)calculateFFT();
++                            if(isWaveformChanged[channel])calculateFFT(channel);
+ 
+                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                             if(current_pos.x>=0&&current_pos.x<data->length.load(std::memory_order_relaxed)/2-1&&std::abs((*spectrum[channel])[current_pos.x])){
+@@ -435,7 +451,7 @@ public:
+                                 channel, std::max(-1,std::min(data->length.load(std::memory_order_relaxed)/2,(int)current_pos.x)),current_pos.y,
+                                 [this](int channel, int x, float y){this->setSpectrumPhase(channel,x,y);}
+                                 );
+-                            if(isLiveUpdate&&isSpectrumChanged)calculateWaveform();
++                            if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
+                         }
+                         ImPlot::EndPlot();
+                     }
+diff --git a/src/PluginUI.cpp b/src/PluginUI.cpp
+index 776bf89..0264618 100644
+--- a/src/PluginUI.cpp
++++ b/src/PluginUI.cpp
+@@ -73,7 +73,11 @@ public:
+         getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
+         strcpy(sampleFilePath, path);
+         editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels.load(std::memory_order_relaxed)==1);
+-        editor->calculateFFT();
++        for(int i =0;i<2;i++)
++        {
++            editor->calculateFFT(i);
++
++        }
+         setDirty();
+     }
+ 

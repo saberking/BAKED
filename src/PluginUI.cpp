@@ -73,7 +73,11 @@ public:
         getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
         strcpy(sampleFilePath, path);
         editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels.load(std::memory_order_relaxed)==1);
-        editor->calculateFFT();
+        for(int i =0;i<2;i++)
+        {
+            editor->calculateFFT(i);
+
+        }
         setDirty();
     }
 
