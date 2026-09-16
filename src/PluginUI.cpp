@@ -71,9 +71,8 @@ public:
 
     void setDroppedFilePath(const char* path) override {
         getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
-        // setState("sampleFilePath" ,path);
         strcpy(sampleFilePath, path);
-        editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels==1);
+        editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels.load(std::memory_order_relaxed)==1);
         editor->calculateFFT();
         setDirty();
     }

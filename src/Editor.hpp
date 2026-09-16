@@ -61,7 +61,7 @@ public:
 
         }
         calculateFFT();
-        isMono=(data->channels==1);
+        isMono=(data->channels.load()==1);
     }
 
     Window& getWindow() const override {

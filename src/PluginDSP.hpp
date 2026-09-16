@@ -93,22 +93,28 @@ protected:
 
         // 1. Pack your sizes and channels sequentially into a simple local raw byte array
         size_t headerSize = sizeof(uint32_t);
-        size_t channelDataSize = length * sizeof(float);
+        size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
         size_t totalBytes = headerSize + (channelDataSize * 2);
 
         std::vector<uint8_t> rawBinaryBuffer(totalBytes);
 
         // Copy length header
         std::memcpy(rawBinaryBuffer.data(), &length, headerSize);
-        // Copy left channel
-        std::memcpy(rawBinaryBuffer.data() + headerSize, modules[0]->sample->sampleData[0].data(), channelDataSize);
-        // Copy right channel
-        std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize, modules[0]->sample->sampleData[1].data(), channelDataSize);
 
-        // 2. Use the library! Convert the whole blob into a safe text string in ONE line
+        float* leftDest = reinterpret_cast<float*>(rawBinaryBuffer.data() + headerSize);
+        for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+            leftDest[i] = modules[0]->sample->sampleData[0][i].load(std::memory_order_relaxed);
+        }
+
+        float* rightDest = reinterpret_cast<float*>(rawBinaryBuffer.data() + headerSize + channelDataSize);
+        for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+            rightDest[i] = modules[0]->sample->sampleData[1][i].load(std::memory_order_relaxed);
+        }
+
+        // 3. Convert to base64 text string safely
         std::string encodedText = base64_encode(rawBinaryBuffer.data(), rawBinaryBuffer.size());
-
         return String(encodedText.c_str());
+
     }
 
     void setState(const char *key, const char * value){
@@ -121,7 +127,7 @@ protected:
         const uint8_t* rawData = reinterpret_cast<const uint8_t*>(decodedBytes.data());
 
         // 2. Read the sample length header out of the first 4 bytes
-        uint32_t length = 0;
+        uint32_t length;
         std::memcpy(&length, rawData, sizeof(uint32_t));
 
 
@@ -129,11 +135,20 @@ protected:
 
         // 4. Extract data directly out of the remaining decoded data stream
         size_t headerSize = sizeof(uint32_t);
-        size_t channelDataSize = length * sizeof(float);
+        size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
 
-        std::memcpy(modules[0]->sample->sampleData[0].data(), rawData + headerSize, channelDataSize);
-        std::memcpy(modules[0]->sample->sampleData[1].data(), rawData + headerSize + channelDataSize, channelDataSize);
 
+        // Create temporary pointers pointing to the raw decoded byte stream
+        const float* leftSrc = reinterpret_cast<const float*>(rawData + headerSize);
+        const float* rightSrc = reinterpret_cast<const float*>(rawData + headerSize + channelDataSize);
+
+        // Safely write the standard floats back into your std::atomic<float> vectors
+        for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+            modules[0]->sample->sampleData[0][i].store(leftSrc[i], std::memory_order_relaxed);
+        }
+        for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+            modules[0]->sample->sampleData[1][i].store(rightSrc[i], std::memory_order_relaxed);
+        }
 
 
     }
