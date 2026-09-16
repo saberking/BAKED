@@ -343,7 +343,7 @@ public:
                                 }
                             }
                             handleDrag(
-                                channel, std::max(0,std::min(MAX_SAMPLE_LENGTH-1,(int)current_pos.x)),current_pos.y,
+                                channel, std::max(-1,std::min(MAX_SAMPLE_LENGTH,(int)current_pos.x)),current_pos.y,
                                 [this](int channel, int x, float y){this->setWaveformSample(channel,x,y);}
                                 );
                             if(isLiveUpdate&&isWaveformChanged)calculateFFT();
@@ -380,7 +380,7 @@ public:
                                 }
                             }
                             handleDrag(
-                                channel, std::max(0,std::min(MAX_SAMPLE_LENGTH/2-1,(int)current_pos.x)),current_pos.y,
+                                channel, std::max(-1,std::min(MAX_SAMPLE_LENGTH/2,(int)current_pos.x)),current_pos.y,
                                 [this](int channel, int x, float y){this->setSpectrumAmplitude(channel,x,y);}
                                 );
 
@@ -412,7 +412,7 @@ public:
                                 setSpectrumPhase(channel, current_pos.x,current_pos.y);
                             }
                             handleDrag(
-                                channel, std::max(0,std::min(data->length.load(std::memory_order_relaxed)/2-1,(int)current_pos.x)),current_pos.y,
+                                channel, std::max(-1,std::min(data->length.load(std::memory_order_relaxed)/2,(int)current_pos.x)),current_pos.y,
                                 [this](int channel, int x, float y){this->setSpectrumPhase(channel,x,y);}
                                 );
                             if(isLiveUpdate&&isSpectrumChanged)calculateWaveform();
