@@ -43,7 +43,7 @@ public:
         data=module->sample;
         spec.Flags = ImPlotFlags_CanvasOnly;
         setResizable(true);
-        setSize(1400,950);
+        setSize(1400,970);
         for(int i=0;i<6;i++){
             imPlotContext[i]=ImPlot::CreateContext();
         }
@@ -219,8 +219,42 @@ public:
         return std::max(-1.f,std::min(1.f,input));
     }
 
-    void startDrag(int x, float y)
+    void setWaveformSample(int channel, int x, float y)
     {
+        data->sampleData[channel][x].store(clip(y));
+        isWaveformChanged=true;
+
+    }
+
+    void setSpectrumAmplitude(int channel, int x, float y)
+    {
+        (*spectrum[channel])[x]=std::polar(
+            (float)std::max(y,0.f),
+            (float)(std::abs((*spectrum[channel])[x])?std::arg((*spectrum[channel])[x]):-M_PI/2)
+            );
+        isSpectrumChanged=true;
+    }
+
+    void setSpectrumPhase(int channel, int x, float y)
+    {
+        (*spectrum[channel])[x]=std::polar(
+            std::abs((*spectrum[channel])[x]),
+            (float)(std::max(y,0.f)-M_PI/2)
+            );
+        isSpectrumChanged=true;
+    }
+
+    void handleDrag(int channel, int x, float y, std::function<void(int, int, float)> callback)
+    {
+        if(isDragging&&x!=dragStartX){
+            int xStep = x>dragStartX?1:-1;
+            int noOfSteps=std::abs(x-dragStartX);
+            float yStep =(y-dragStartY)/noOfSteps;
+            for(int index=1;index<noOfSteps;index++)
+            {
+                callback(channel,dragStartX+index*xStep, dragStartY+index*yStep);
+            }
+        }
         isDragging=true;
         dragStartX=x;
         dragStartY=y;
@@ -303,26 +337,16 @@ public:
                             if(isSpectrumChanged)calculateWaveform();
                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
                             if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH){
-                                data->sampleData[channel][current_pos.x].store(clip(current_pos.y));
+                                setWaveformSample(channel, current_pos.x, current_pos.y);
                                 if(data->length.load(std::memory_order_relaxed)<(int)current_pos.x+1){
                                     data->length.store((int)current_pos.x+1, std::memory_order_relaxed);
                                 }
-                                if(isDragging&&current_pos.x!=dragStartX){
-                                    int xStep = current_pos.x>dragStartX?1:-1;
-                                    int noOfSteps=std::abs((int)current_pos.x-(int)dragStartX);
-                                    float yStep =(current_pos.y-dragStartY)/noOfSteps;
-                                    for(int index=1;index<noOfSteps;index++)
-                                    {
-                                        data->sampleData[channel][(int)dragStartX+index*xStep].store(clip(dragStartY+index*yStep));
-                                    }
-                                }
-                                startDrag(current_pos.x,current_pos.y);
-
-                                isWaveformChanged=true;
-
-                                if(isLiveUpdate)calculateFFT();
-
                             }
+                            handleDrag(
+                                channel, std::max(0,std::min(MAX_SAMPLE_LENGTH-1,(int)current_pos.x)),current_pos.y,
+                                [this](int channel, int x, float y){this->setWaveformSample(channel,x,y);}
+                                );
+                            if(isLiveUpdate&&isWaveformChanged)calculateFFT();
                         }
                         showPlayhead();
                         ImPlot::EndPlot();
@@ -349,21 +373,18 @@ public:
                             if(isWaveformChanged)calculateFFT();
                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
                             if(current_pos.x>=0&&current_pos.x<MAX_SAMPLE_LENGTH/2-1){
-                                (*spectrum[channel])[current_pos.x]=std::polar(
-                                    current_pos.y>0?(float)current_pos.y:0.f,
-                                    (float)(
-                                        std::abs((*spectrum[channel])[current_pos.x])?std::arg((*spectrum[channel])[current_pos.x]):-M_PI/2
-                                        )
-                                    );
+                                setSpectrumAmplitude(channel,current_pos.x,current_pos.y);
                                 if(data->length.load(std::memory_order_relaxed)<(int)current_pos.x*2+2){
                                     data->length.store((int)current_pos.x*2+2, std::memory_order_relaxed);
                                     (*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
                                 }
-                                isSpectrumChanged=true;
-
-                                if(isLiveUpdate)calculateWaveform();
-
                             }
+                            handleDrag(
+                                channel, std::max(0,std::min(MAX_SAMPLE_LENGTH/2-1,(int)current_pos.x)),current_pos.y,
+                                [this](int channel, int x, float y){this->setSpectrumAmplitude(channel,x,y);}
+                                );
+
+                            if(isLiveUpdate&&isSpectrumChanged)calculateWaveform();
                         }
                         ImPlot::EndPlot();
                     }
@@ -387,16 +408,18 @@ public:
                             if(isWaveformChanged)calculateFFT();
 
                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-                            if(current_pos.x>=0&&current_pos.x<data->length.load(std::memory_order_relaxed)/2&&std::abs((*spectrum[channel])[current_pos.x])){
-                                (*spectrum[channel])[current_pos.x]=std::polar(std::abs((*spectrum[channel])[current_pos.x]), (float)(std::max(current_pos.y,0.d)-M_PI/2));
-                                isSpectrumChanged=true;
-                                if(isLiveUpdate)calculateWaveform();
-
+                            if(current_pos.x>=0&&current_pos.x<data->length.load(std::memory_order_relaxed)/2-1&&std::abs((*spectrum[channel])[current_pos.x])){
+                                setSpectrumPhase(channel, current_pos.x,current_pos.y);
                             }
+                            handleDrag(
+                                channel, std::max(0,std::min(data->length.load(std::memory_order_relaxed)/2-1,(int)current_pos.x)),current_pos.y,
+                                [this](int channel, int x, float y){this->setSpectrumPhase(channel,x,y);}
+                                );
+                            if(isLiveUpdate&&isSpectrumChanged)calculateWaveform();
                         }
-
+                        ImPlot::EndPlot();
                     }
-                    ImPlot::EndPlot();
+
 
                 }
                 ImGui::EndTable();
