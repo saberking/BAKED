@@ -176,13 +176,27 @@ public:
                 waveform[j]->data(),
                 fct
                 );
+
+        }
+        bool normalise=false;
+        for(int j=0;j<data->maxChannels;j++){
+            float maxVal=1;
             for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
-                data->sampleData[j][k].store((*waveform[j])[k]);
+                (std::abs((*waveform[j])[k])>maxVal)&&(maxVal=std::abs((*waveform[j])[k]));
+            }
+            if(maxVal>1)normalise=true;
+            float multiplier=1/maxVal;
+            for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
+                data->sampleData[j][k].store((*waveform[j])[k]*multiplier);
             }
             delete waveform[j];
-            isSpectrumChanged=false;
-            setDirty();
         }
+        if(normalise)
+        {
+            calculateFFT();
+        }
+        isSpectrumChanged=false;
+        setDirty();
 
     }
 
