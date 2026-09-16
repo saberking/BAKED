@@ -33,7 +33,6 @@ public:
 
     }
     ~ImGuiPluginDSP(){
-        consoleAttached&&FreeConsole();
         for(int i=0;i<modules.size();i++){
             delete(modules[i]);
         }

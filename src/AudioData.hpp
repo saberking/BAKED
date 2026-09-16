@@ -16,7 +16,7 @@ public:
     std::atomic<int> channels = 1;
     const int maxChannels;
     std::vector<std::atomic<float>> sampleData[2];
-    int length=0;
+    std::atomic<int> length=0;
     AudioData(int _maxChannels):maxChannels(_maxChannels){
         for(int i=0;i<maxChannels;i++)
         {
@@ -38,9 +38,9 @@ public:
         int audioFileChannels = audioFile.getNumChannels();
         channels.store(audioFileChannels, std::memory_order_relaxed);
         std::cout<<"stored channels"<<std::endl;
-        length=audioFile.samples[0].size();
+        length.store(audioFile.samples[0].size(), std::memory_order_relaxed);
         float temp;
-        for(int i=0;i<length&&i<MAX_SAMPLE_LENGTH;i++)
+        for(int i=0;i<length.load(std::memory_order_relaxed)&&i<MAX_SAMPLE_LENGTH;i++)
         {
             if(maxChannels==2){
                 sampleData[0][i].store(audioFile.samples[0][i], std::memory_order_relaxed);
@@ -54,7 +54,7 @@ public:
             }
 
         }
-        std::cout<<"length: "<<length<<"\n\n";
+        std::cout<<"length: "<<length.load(std::memory_order_relaxed)<<"\n\n";
 
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioData)
@@ -148,12 +148,12 @@ inline float SamplePlaybackEngineMonophonic::getReleaseValue(){
 inline void SamplePlaybackEngineMonophonic::timeStep(){
     if(playing){
         playhead+=*(module->speed);
-        if(playhead>module->sample->length-1){
+        if(playhead>module->sample->length.load(std::memory_order_relaxed)-1){
             stop(); return;
         }
         if(released){
             releasePlayhead+=*(module->releaseSpeed);
-            if(releasePlayhead>module->releaseCurve->length-1){
+            if(releasePlayhead>module->releaseCurve->length.load(std::memory_order_relaxed)-1){
                 stop();
             }
         }
@@ -178,7 +178,7 @@ inline void SamplePlaybackEngineMonophonic::noteOff(int _midiNote){
 }
 inline void SamplePlaybackEngineMonophonic::run(float outputs[2]){
     outputs[0]=outputs[1]=0;
-    if(playhead>module->sample->length-1){
+    if(playhead>module->sample->length.load(std::memory_order_relaxed)-1){
         stop();
         return;
     }
