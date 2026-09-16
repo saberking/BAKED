@@ -17,42 +17,30 @@ struct PlotAudioContext {
     int channel;
 };
 
-// enum EditorViews {
-//     ev_waveform=0,
-//     ev_partialAmplitude,
-//     ev_partialPhase,
-//     ev_count
-// };
-
-// const char *editorViewNames[] = {"Waveform", "Partial amplitude", "Partial phase"};
-
 class SampleEditor : public DGL::ImGuiStandaloneWindow, public FileDropReceiver
 {
 public:
     AudioData *data=NULL;
     Module *module=NULL;
-    bool isRelease=false;
-    char name[MAX_FILE_PATH_LENGTH];
     ImPlotSpec spec;
     bool editMode=false;
     bool isMono;
     ImPlotContext* imPlotContext[6];
     std::vector<std::complex<float>> *spectrum[2] ;
-    //EditorViews currentView=ev_waveform;
     bool isSpectrumChanged=false;
     bool isLiveUpdate=true;
     bool isWaveformChanged=false;
     std::function<void(const char*)> fileDropped;
     int length;
     bool isDragging=false;
-    float dragStartX, dragStartY;
+    float  dragStartY;
+    int dragStartX;
 
     SampleEditor(const char *_name, Module *_module, Window& window, std::function<void(const char*)> _fileDropped):
         DGL::ImGuiStandaloneWindow(window.getApp(), window) {
-        strcpy(name, _name);
         module=_module;
         fileDropped=_fileDropped;
-        if(!isRelease)data=module->sample;
+        data=module->sample;
         spec.Flags = ImPlotFlags_CanvasOnly;
         setResizable(true);
         setSize(1400,950);
@@ -231,6 +219,12 @@ public:
         return std::max(-1.f,std::min(1.f,input));
     }
 
+    void startDrag(int x, float y)
+    {
+        isDragging=true;
+        dragStartX=x;
+        dragStartY=y;
+    }
 
     void onImGuiDisplay() override{
 
@@ -322,9 +316,8 @@ public:
                                         data->sampleData[channel][(int)dragStartX+index*xStep].store(clip(dragStartY+index*yStep));
                                     }
                                 }
-                                isDragging=true;
-                                dragStartX=current_pos.x;
-                                dragStartY=current_pos.y;
+                                startDrag(current_pos.x,current_pos.y);
+
                                 isWaveformChanged=true;
 
                                 if(isLiveUpdate)calculateFFT();
