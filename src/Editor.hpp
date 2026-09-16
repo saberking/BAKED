@@ -44,6 +44,8 @@ public:
     bool isWaveformChanged=false;
     std::function<void(const char*)> fileDropped;
     int length;
+    bool isDragging=false;
+    float dragStartX, dragStartY;
 
     SampleEditor(const char *_name, Module *_module, Window& window, std::function<void(const char*)> _fileDropped):
         DGL::ImGuiStandaloneWindow(window.getApp(), window) {
@@ -311,8 +313,22 @@ public:
                                 if(data->length.load(std::memory_order_relaxed)<(int)current_pos.x+1){
                                     data->length.store((int)current_pos.x+1, std::memory_order_relaxed);
                                 }
+                                if(isDragging&&current_pos.x!=dragStartX){
+                                    int xStep = current_pos.x>dragStartX?1:-1;
+                                    int noOfSteps=std::abs((int)current_pos.x-(int)dragStartX);
+                                    float yStep =(current_pos.y-dragStartY)/noOfSteps;
+                                    for(int index=1;index<noOfSteps;index++)
+                                    {
+                                        data->sampleData[channel][(int)dragStartX+index*xStep].store(clip(dragStartY+index*yStep));
+                                    }
+                                }
+                                isDragging=true;
+                                dragStartX=current_pos.x;
+                                dragStartY=current_pos.y;
                                 isWaveformChanged=true;
+
                                 if(isLiveUpdate)calculateFFT();
+
                             }
                         }
                         showPlayhead();
@@ -346,11 +362,12 @@ public:
                                         std::abs((*spectrum[channel])[current_pos.x])?std::arg((*spectrum[channel])[current_pos.x]):-M_PI/2
                                         )
                                     );
-                                isSpectrumChanged=true;
                                 if(data->length.load(std::memory_order_relaxed)<(int)current_pos.x*2+2){
                                     data->length.store((int)current_pos.x*2+2, std::memory_order_relaxed);
                                     (*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
                                 }
+                                isSpectrumChanged=true;
+
                                 if(isLiveUpdate)calculateWaveform();
 
                             }
@@ -381,6 +398,7 @@ public:
                                 (*spectrum[channel])[current_pos.x]=std::polar(std::abs((*spectrum[channel])[current_pos.x]), (float)(std::max(current_pos.y,0.d)-M_PI/2));
                                 isSpectrumChanged=true;
                                 if(isLiveUpdate)calculateWaveform();
+
                             }
                         }
 
@@ -391,6 +409,7 @@ public:
                 ImGui::EndTable();
 
             }
+            if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))isDragging=false;
 
         }
         ImGui::End();
