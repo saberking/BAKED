@@ -80,22 +80,39 @@ protected:
     void initState(uint32_t index, String& key, String& defaultValue) override
     {
         if (index == 0) {
-            key = "sampleFilePath";
-            defaultValue = "Drop sample here";
+            key = "sampleData";
+            defaultValue = "";
         }
     }
 
     String getState(const char* key) const override {
 
-        return (String) (modules[0]->sampleFilePath);
+        size_t totalSamples = modules[0]->sample->length*2;
+        if (totalSamples == 0) return String("");
+
+        // Calculate exact binary size requirements
+        size_t headerSize = sizeof(uint32_t) * 2; // Storage for left & right sample counts
+        size_t dataSize = totalSamples * sizeof(float);
+        size_t totalBytes = headerSize + dataSize;
+
+        // Allocate a flat byte array buffer (+1 for the string null terminator)
+        std::vector<char> byteBuffer(totalBytes + 1, 0);
+
+        // 1. Pack the Header (sizes of channel vectors)
+        uint32_t length = static_cast<uint32_t>(modules[0]->sample->length.load(std::memory_order_relaxed));
+
+
+
+
+        // Trick DPF into saving raw binary by casting the character pointer
+        return String(byteBuffer.data(), totalBytes);
     }
 
-    void setState(const char *key, const char * value){
-        if(strcmp(key, "sampleFilePath")==0){
-            strcpy(modules[0]->sampleFilePath, value);
-        }else{
-            updateStateValue("sampleFilePath", modules[0]->sampleFilePath);
-        }
+    void setState(const char *key, const char * byteData){
+        if(!std::strlen(byteData)) return;
+
+
+
     }
 
     void noteOn(int midiNote, int velocity){

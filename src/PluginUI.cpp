@@ -60,8 +60,8 @@ public:
     }
 
     void stateChanged(const char* key, const char* value){
-        strcpy(sampleFilePath, value);
-    };
+       // strcpy(sampleFilePath, value);
+    }
 
     ImGuiPluginDSP* getPluginDPSPointer(){
         auto* plugin = static_cast<ImGuiPluginDSP*>(getPluginInstancePointer());
@@ -70,10 +70,11 @@ public:
 
     void setDroppedFilePath(const char* path) override {
         getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
-        setState("sampleFilePath" ,path);
+        // setState("sampleFilePath" ,path);
         strcpy(sampleFilePath, path);
         editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels==1);
         editor->calculateFFT();
+        setState("sampleData","");
     }
 
     Window& getWindow() const override {
@@ -129,7 +130,7 @@ protected:
 
         if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize))
         {
-            ImGui::Text("Filepath: %s", sampleFilePath);
+            // ImGui::Text("Filepath: %s", sampleFilePath);
             // if (ImGui::CollapsingHeader("Sample Editor"))
             // {
             //     ImGui::Indent();
