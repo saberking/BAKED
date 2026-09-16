@@ -30,6 +30,7 @@ dpf_add_plugin(${NAME}
   TARGETS ${TARGETS_LIST}
   FILES_DSP
       src/PluginDSP.cpp
+      src/external/base64.cpp
   FILES_UI
       src/PluginUI.cpp
       src/external/implot.cpp

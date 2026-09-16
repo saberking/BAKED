@@ -5,6 +5,7 @@
 #include "Parameters.hpp"
 #include "WinConsoleOutput.hpp"
 #include "AudioData.hpp"
+#include "external/base64.h"
 
 START_NAMESPACE_DISTRHO
 
@@ -87,29 +88,51 @@ protected:
 
     String getState(const char* key) const override {
 
-        size_t totalSamples = modules[0]->sample->length*2;
-        if (totalSamples == 0) return String("");
-
-        // Calculate exact binary size requirements
-        size_t headerSize = sizeof(uint32_t) * 2; // Storage for left & right sample counts
-        size_t dataSize = totalSamples * sizeof(float);
-        size_t totalBytes = headerSize + dataSize;
-
-        // Allocate a flat byte array buffer (+1 for the string null terminator)
-        std::vector<char> byteBuffer(totalBytes + 1, 0);
-
-        // 1. Pack the Header (sizes of channel vectors)
         uint32_t length = static_cast<uint32_t>(modules[0]->sample->length.load(std::memory_order_relaxed));
+        if (length == 0) return String("");
 
+        // 1. Pack your sizes and channels sequentially into a simple local raw byte array
+        size_t headerSize = sizeof(uint32_t);
+        size_t channelDataSize = length * sizeof(float);
+        size_t totalBytes = headerSize + (channelDataSize * 2);
 
+        std::vector<uint8_t> rawBinaryBuffer(totalBytes);
 
+        // Copy length header
+        std::memcpy(rawBinaryBuffer.data(), &length, headerSize);
+        // Copy left channel
+        std::memcpy(rawBinaryBuffer.data() + headerSize, modules[0]->sample->sampleData[0].data(), channelDataSize);
+        // Copy right channel
+        std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize, modules[0]->sample->sampleData[1].data(), channelDataSize);
 
-        // Trick DPF into saving raw binary by casting the character pointer
-        return String(byteBuffer.data(), totalBytes);
+        // 2. Use the library! Convert the whole blob into a safe text string in ONE line
+        std::string encodedText = base64_encode(rawBinaryBuffer.data(), rawBinaryBuffer.size());
+
+        return String(encodedText.c_str());
     }
 
-    void setState(const char *key, const char * byteData){
-        if(!std::strlen(byteData)) return;
+    void setState(const char *key, const char * value){
+        if (strlen(value) == 0 ) {
+            return;
+        }
+
+        std::string decodedBytes = base64_decode(std::string(value));
+
+        const uint8_t* rawData = reinterpret_cast<const uint8_t*>(decodedBytes.data());
+
+        // 2. Read the sample length header out of the first 4 bytes
+        uint32_t length = 0;
+        std::memcpy(&length, rawData, sizeof(uint32_t));
+
+
+        modules[0]->sample->length.store(length, std::memory_order_relaxed);
+
+        // 4. Extract data directly out of the remaining decoded data stream
+        size_t headerSize = sizeof(uint32_t);
+        size_t channelDataSize = length * sizeof(float);
+
+        std::memcpy(modules[0]->sample->sampleData[0].data(), rawData + headerSize, channelDataSize);
+        std::memcpy(modules[0]->sample->sampleData[1].data(), rawData + headerSize + channelDataSize, channelDataSize);
 
 
 

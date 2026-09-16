@@ -52,9 +52,10 @@ public:
         if (isResizable())
             fResizeHandle.hide();
         oleDropTarget=new MyOleDropTarget(this);
-        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow(), [this](const char* path) {
-            this->setDroppedFilePath(path);
-        });
+        editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow(),
+            [this](const char* path) {this->setDroppedFilePath(path);},
+            [this](){this->setDirty();}
+            );
 
         editor->show();
     }
@@ -74,7 +75,16 @@ public:
         strcpy(sampleFilePath, path);
         editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels==1);
         editor->calculateFFT();
-        setState("sampleData","");
+        setDirty();
+    }
+
+    void setDirty(){
+        editParameter(kParamSpeed, true);  // Tells DAW: "User is actively clicking/modifying a parameter"
+
+        // Pass the exact current speed value back into itself so the knob position doesn't visually jump
+        setParameterValue(kParamSpeed, fSpeed);
+
+        editParameter(kParamSpeed, false);
     }
 
     Window& getWindow() const override {

@@ -31,15 +31,19 @@ public:
     bool isLiveUpdate=true;
     bool isWaveformChanged=false;
     std::function<void(const char*)> fileDropped;
+    std::function<void()> setDirty;
     int length;
     bool isDragging=false;
     float  dragStartY;
     int dragStartX;
 
-    SampleEditor(const char *_name, Module *_module, Window& window, std::function<void(const char*)> _fileDropped):
+    SampleEditor(const char *_name, Module *_module, Window& window,
+                 std::function<void(const char*)> _fileDropped, std::function<void()> _setDirty
+        ):
         DGL::ImGuiStandaloneWindow(window.getApp(), window) {
         module=_module;
         fileDropped=_fileDropped;
+        setDirty=_setDirty;
         data=module->sample;
         spec.Flags = ImPlotFlags_CanvasOnly;
         setResizable(true);
@@ -177,6 +181,7 @@ public:
             }
             delete waveform[j];
             isSpectrumChanged=false;
+            setDirty();
         }
 
     }
@@ -223,7 +228,7 @@ public:
     {
         data->sampleData[channel][x].store(clip(y));
         isWaveformChanged=true;
-
+        setDirty();
     }
 
     void setSpectrumAmplitude(int channel, int x, float y)
@@ -306,6 +311,7 @@ public:
                 if(length!=data->length.load(std::memory_order_relaxed))
                 {
                     data->length.store(length, std::memory_order_relaxed);
+                    setDirty();
                     isWaveformChanged=true;
                     if(isLiveUpdate)
                     {
