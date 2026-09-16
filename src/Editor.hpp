@@ -253,8 +253,14 @@ public:
             if(editMode)
             {
                 ImGui::SameLine();
-                ImGui::Checkbox("Live update", &isLiveUpdate);
-
+                if(ImGui::Checkbox("Live update", &isLiveUpdate))
+                {
+                    if(isLiveUpdate)
+                    {
+                        if(isSpectrumChanged)calculateWaveform();
+                        if(isWaveformChanged)calculateFFT();
+                    }
+                }
                 if(!isLiveUpdate&&(isSpectrumChanged||isWaveformChanged))
                 {
                     ImGui::SameLine();
