@@ -141,6 +141,7 @@ public:
                 (*spectrum[j])[i]=std::complex(0.f,0.f);
             }
         }
+        (*spectrum[j])[0]/=2;
         isWaveformChanged[j]=false;
 
     }
@@ -164,10 +165,11 @@ public:
         pocketfft::shape_t axes;
 
         axes.push_back ( 0 );
-        for (int i=0; i<data->length.load(std::memory_order_relaxed)/2+1; i++ )
+        for (int i=0; i<data->length.load(std::memory_order_relaxed)/2; i++ )
         {
             data_in[i]= (*spectrum[j])[i] ;
         }
+        data_in[0]*=2;
 
 
         pocketfft::c2r (
@@ -188,9 +190,12 @@ public:
         float multiplier=1/maxVal;
         for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
             data->sampleData[j][k].store(waveform[k]*multiplier);
+
+        }
+        for(int k=0;k<MAX_SAMPLE_LENGTH/2;k++)
+        {
             (*spectrum[j])[k]*=multiplier;
         }
-
 
         isSpectrumChanged[j]=false;
         setDirty();
