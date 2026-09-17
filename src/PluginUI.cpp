@@ -89,8 +89,9 @@ public:
 
             std::transform(binaryPath.begin(), binaryPath.end(), binaryPath.begin(), ::tolower);
 
-            if (binaryPath.find(".clap") != std::string::npos) {
-                return true; // 🟢 Confirmed running inside a .clap binary bundle!
+            std::string target = ".clap";
+            if (binaryPath.length() >= target.length()) {
+                return (binaryPath.compare(binaryPath.length() - target.length(), target.length(), target) == 0);
             }
         }
         return false; // 🔵 Fallback (VST3, etc.)
