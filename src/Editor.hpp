@@ -269,7 +269,7 @@ public:
             int xStep = x>dragStartX?1:-1;
             int noOfSteps=std::abs(x-dragStartX)+1;
             float yStep =(y-dragStartY)/noOfSteps;
-            for(int index=1;index<noOfSteps;index++)
+            for(int index=0;index<noOfSteps;index++)
             {
                 callback(channel,dragStartX+index*xStep, dragStartY+index*yStep);
             }
