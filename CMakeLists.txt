@@ -22,6 +22,7 @@ execute_process(
 add_subdirectory(dpf)
 
 list(APPEND TARGETS_LIST "clap")
+list(APPEND TARGETS_LIST "vst3")
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND TARGETS_LIST "jack")
 endif()
@@ -54,5 +55,8 @@ target_include_directories(${NAME} PUBLIC dpf-widgets/generic)
 target_include_directories(${NAME} PUBLIC dpf-widgets/opengl)
 target_include_directories(${NAME} PUBLIC dpf-widgets/opengl/DearImGui)
 add_compile_definitions(ImDrawIdx=unsigned\ int)
+
+
+
 target_link_libraries(Baked-ui PRIVATE comctl32)
 

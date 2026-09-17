@@ -48,7 +48,13 @@ public:
         //create unique id for automation clip window
         WM_TRIGGER_CLAP_MENU = ::RegisterWindowMessageA("MyUniquePlugin_ClapContextMenu_TriggerMsg");
         HWND hwnd = (HWND)getWindow().getNativeWindowHandle();
-        ::SetWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this), 0);
+        const uint32_t activeFormat = getPluginFormat();
+
+        if (activeFormat == 1)
+        {
+            std::cout<<"setwindowsublcass\n";
+            ::SetWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this), 0);
+        }
         const double scaleFactor = getScaleFactor();
         setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
 
@@ -62,6 +68,37 @@ public:
             );
 
         editor->show();
+    }
+
+    bool checkIfClapAtRuntime()
+    {
+        char fileBuffer[MAX_PATH] = {0};
+        HMODULE hModule = NULL;
+
+        // 🟢 Create a dummy static variable. It lives inside your plugin library's binary memory space.
+        static const int dummyAnchor = 0;
+
+        // 🟢 Pass the address of the dummy anchor variable instead of the member function pointer
+        GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCSTR>(&dummyAnchor), &hModule);
+
+        if (hModule) {
+            GetModuleFileNameA(hModule, fileBuffer, sizeof(fileBuffer));
+            std::string binaryPath(fileBuffer);
+
+            std::transform(binaryPath.begin(), binaryPath.end(), binaryPath.begin(), ::tolower);
+
+            if (binaryPath.find(".clap") != std::string::npos) {
+                return true; // 🟢 Confirmed running inside a .clap binary bundle!
+            }
+        }
+        return false; // 🔵 Fallback (VST3, etc.)
+    }
+
+    int getPluginFormat()
+    {   if(checkIfClapAtRuntime())        return 1;
+        return 0;
     }
 
     void stateChanged(const char* key, const char* value){
@@ -95,16 +132,18 @@ public:
 
     void setDirty(){
 
-        std::cout<<"setting dirty"<<std::endl;
-        auto* clapPointer=reinterpret_cast<const clap_host_t*>(getPluginDPSPointer()->host);
-        auto* hostState = reinterpret_cast<const clap_host_state_t*>(clapPointer->get_extension(clapPointer, CLAP_EXT_STATE));
-        if (hostState != nullptr && hostState->mark_dirty != nullptr) {
-            std::cout << "UI: Found CLAP State extension, forcing FL Studio dirty flag..." << std::endl;
+        const uint32_t activeFormat = getPluginFormat();
+
+        if (activeFormat == 1)
+        {
+            auto* clapPointer=reinterpret_cast<const clap_host_t*>(getPluginDPSPointer()->host);
+            if(!clapPointer)return;
+            auto* hostState = reinterpret_cast<const clap_host_state_t*>(clapPointer->get_extension(clapPointer, CLAP_EXT_STATE));
+            if (hostState != nullptr && hostState->mark_dirty != nullptr) {
 
 
-             hostState->mark_dirty(clapPointer);
-        } else {
-            std::cout << "UI: Host does not support mark_dirty or state extension." << std::endl;
+                hostState->mark_dirty(clapPointer);
+            }
         }
 
         // auto* hostParams = reinterpret_cast<const clap_host_params_t*>(
@@ -112,13 +151,11 @@ public:
         //     );
 
         // if (hostParams != nullptr && hostParams->rescan != nullptr) {
-        //     std::cout << "UI: Triggering lightweight parameter rescan to flag FL Studio..." << std::endl;
 
         //     hostParams->rescan(clapPointer, CLAP_PARAM_RESCAN_TEXT);
         // }
 
         // if (hostParams != nullptr && hostParams->request_flush != nullptr) {
-        //     std::cout << "UI: Executing direct CLAP thread flush to force FL Studio dirty flag..." << std::endl;
 
         //     hostParams->request_flush(clapPointer);
         // }
@@ -131,29 +168,39 @@ public:
     static LRESULT CALLBACK SubclassMenuProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
                                              UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
     {
+
+
+
         if (uMsg == WM_TRIGGER_CLAP_MENU)
         {
             // Safely extract the heap data passed through the OS message queue
             auto* payload = reinterpret_cast<AsyncMenuPayload*>(wParam);
             if (payload)
             {
-                auto* menuExt = (const clap_host_context_menu_t*)payload->host->get_extension(payload->host, CLAP_EXT_CONTEXT_MENU);
-                if (menuExt && menuExt->popup)
+                if(payload->host)
                 {
-                    clap_context_menu_target_t target;
-                    target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
-                    target.id = kParamSpeed;
+                    std::cout<<"LRESULT CALLBACK"<<std::endl;
+                    auto* menuExt = (const clap_host_context_menu_t*)payload->host->get_extension(payload->host, CLAP_EXT_CONTEXT_MENU);
+                    if (menuExt && menuExt->popup)
+                    {
+                        clap_context_menu_target_t target;
+                        target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
+                        target.id = kParamSpeed;
 
-                    // Open the menu cleanly outside of the active ImGui/DPF render cycle.
-                    // This un-freezes both windows and eliminates the multi-instance crash!
-                    menuExt->popup(payload->host, &target, 0, payload->screenX, payload->screenY);
+                        // Open the menu cleanly outside of the active ImGui/DPF render cycle.
+                        // This un-freezes both windows and eliminates the multi-instance crash!
+                        menuExt->popup(payload->host, &target, 0, payload->screenX, payload->screenY);
+                    }
+
+
                 }
-
                 // Delete the temporary payload allocation immediately after use
                 delete payload;
+
             }
             return 0;
         }
+
 
         // Pass every other standard OS window message safely back to DPF
         return ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
@@ -200,31 +247,35 @@ protected:
                 setParameterValue(kParamSpeed, fSpeed);
 
             }
-            if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+            const uint32_t activeFormat = getPluginFormat();
+            if (activeFormat == 1)
             {
-                const clap_host_t* host=static_cast<const clap_host_t*>(getPluginDPSPointer()->host);
-                HWND hwnd = reinterpret_cast<HWND>(getWindow().getNativeWindowHandle());
+                if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+                {
+                    const clap_host_t* host=static_cast<const clap_host_t*>(getPluginDPSPointer()->host);
+                    HWND hwnd = reinterpret_cast<HWND>(getWindow().getNativeWindowHandle());
 
-                if(host){
-                    // Query DAW for the context menu extension
-                    auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
-                    std::cout<<"menuExt"<<std::endl;
-                    if (menuExt && menuExt->popup)
-                    {
-                        std::cout<<"pop"<<std::endl;
+                    if(host){
+                        // Query DAW for the context menu extension
+                        auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
+                        std::cout<<"menuExt"<<std::endl;
+                        if (menuExt && menuExt->popup)
+                        {
+                            std::cout<<"pop"<<std::endl;
 
 
-                        ImVec2 mousePos = ImGui::GetMousePos();
+                            ImVec2 mousePos = ImGui::GetMousePos();
 
-                        auto* payload = new AsyncMenuPayload();
-                        payload->host = host;
-                        payload->screenX = mousePos.x;
-                        payload->screenY = mousePos.y;
+                            auto* payload = new AsyncMenuPayload();
+                            payload->host = host;
+                            payload->screenX = mousePos.x;
+                            payload->screenY = mousePos.y;
 
-                        ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
+                            ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
+                        }
                     }
-                }
 
+                }
             }
             if (ImGui::IsItemDeactivated())
             {

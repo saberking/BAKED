@@ -11,6 +11,7 @@ START_NAMESPACE_DISTRHO
 
 Plugin* createPlugin()
 {
+
     return new ImGuiPluginDSP();
 }
 

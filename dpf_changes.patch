@@ -6,7 +6,7 @@ index 8570f9e9..79d1197e 100644
  class Plugin
  {
  public:
-+    void *host;
++    void *host=nullptr;
     /**
        Plugin class constructor.@n
        You must set all parameter values to their defaults, matching ParameterRanges::def.
