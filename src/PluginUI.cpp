@@ -61,7 +61,15 @@ public:
     }
 
     void stateChanged(const char* key, const char* value){
-       // strcpy(sampleFilePath, value);
+        // if(!strcmp(key, "loadedTrigger"))
+        // {
+        //     editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels.load(std::memory_order_relaxed)==1);
+        //     for(int i =0;i<2;i++)
+        //     {
+        //         editor->calculateFFT(i);
+
+        //     }
+        // }
     }
 
     ImGuiPluginDSP* getPluginDPSPointer(){

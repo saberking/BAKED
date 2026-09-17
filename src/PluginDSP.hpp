@@ -87,70 +87,82 @@ protected:
     }
 
     String getState(const char* key) const override {
+        if (!strcmp(key,"sampleData"))
+        {
+            uint32_t length = static_cast<uint32_t>(modules[0]->sample->length.load(std::memory_order_relaxed));
+            if (length == 0) return String("");
 
-        uint32_t length = static_cast<uint32_t>(modules[0]->sample->length.load(std::memory_order_relaxed));
-        if (length == 0) return String("");
+            // 1. Pack your sizes and channels sequentially into a simple local raw byte array
+            size_t headerSize = sizeof(uint32_t);
+            size_t channelsSize=sizeof(uint32_t);
+            size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
+            size_t totalBytes = headerSize + (channelDataSize * 2)+channelsSize;
 
-        // 1. Pack your sizes and channels sequentially into a simple local raw byte array
-        size_t headerSize = sizeof(uint32_t);
-        size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
-        size_t totalBytes = headerSize + (channelDataSize * 2);
+            std::vector<uint8_t> rawBinaryBuffer(totalBytes);
 
-        std::vector<uint8_t> rawBinaryBuffer(totalBytes);
+            // Copy length header
+            std::memcpy(rawBinaryBuffer.data(), &length, headerSize);
 
-        // Copy length header
-        std::memcpy(rawBinaryBuffer.data(), &length, headerSize);
+            float* leftDest = reinterpret_cast<float*>(rawBinaryBuffer.data() + headerSize);
+            for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+                leftDest[i] = modules[0]->sample->sampleData[0][i].load(std::memory_order_relaxed);
+            }
 
-        float* leftDest = reinterpret_cast<float*>(rawBinaryBuffer.data() + headerSize);
-        for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
-            leftDest[i] = modules[0]->sample->sampleData[0][i].load(std::memory_order_relaxed);
-        }
+            float* rightDest = reinterpret_cast<float*>(rawBinaryBuffer.data() + headerSize + channelDataSize);
+            for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+                rightDest[i] = modules[0]->sample->sampleData[1][i].load(std::memory_order_relaxed);
+            }
 
-        float* rightDest = reinterpret_cast<float*>(rawBinaryBuffer.data() + headerSize + channelDataSize);
-        for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
-            rightDest[i] = modules[0]->sample->sampleData[1][i].load(std::memory_order_relaxed);
-        }
+            uint32_t channels = static_cast<uint32_t>(modules[0]->sample->channels.load(std::memory_order_relaxed));
+            std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2, &channels, channelsSize);
 
-        // 3. Convert to base64 text string safely
-        std::string encodedText = base64_encode(rawBinaryBuffer.data(), rawBinaryBuffer.size());
-        return String(encodedText.c_str());
+            // 3. Convert to base64 text string safely
+            std::string encodedText = base64_encode(rawBinaryBuffer.data(), rawBinaryBuffer.size());
+            return String(encodedText.c_str());
+        }else return String("");
 
     }
 
     void setState(const char *key, const char * value){
-        if (strlen(value) == 0 ) {
-            return;
+        if(!strcmp("sampleData", key))
+        {
+            if (strlen(value) == 0 ) {
+                return;
+            }
+
+            std::string decodedBytes = base64_decode(std::string(value));
+
+            const uint8_t* rawData = reinterpret_cast<const uint8_t*>(decodedBytes.data());
+
+            // 2. Read the sample length header out of the first 4 bytes
+            uint32_t length;
+            std::memcpy(&length, rawData, sizeof(uint32_t));
+
+
+            modules[0]->sample->length.store(length, std::memory_order_relaxed);
+
+            // 4. Extract data directly out of the remaining decoded data stream
+            size_t headerSize = sizeof(uint32_t);
+            size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
+
+
+            // Create temporary pointers pointing to the raw decoded byte stream
+            const float* leftSrc = reinterpret_cast<const float*>(rawData + headerSize);
+            const float* rightSrc = reinterpret_cast<const float*>(rawData + headerSize + channelDataSize);
+
+            // Safely write the standard floats back into your std::atomic<float> vectors
+            for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+                modules[0]->sample->sampleData[0][i].store(leftSrc[i], std::memory_order_relaxed);
+            }
+            for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+                modules[0]->sample->sampleData[1][i].store(rightSrc[i], std::memory_order_relaxed);
+            }
+
+            uint32_t channels;
+            std::memcpy(&channels, rawData + headerSize + channelDataSize*2, sizeof(uint32_t));
+            modules[0]->sample->channels.store(channels, std::memory_order_relaxed);
+           // updateStateValue("loadedTrigger","");
         }
-
-        std::string decodedBytes = base64_decode(std::string(value));
-
-        const uint8_t* rawData = reinterpret_cast<const uint8_t*>(decodedBytes.data());
-
-        // 2. Read the sample length header out of the first 4 bytes
-        uint32_t length;
-        std::memcpy(&length, rawData, sizeof(uint32_t));
-
-
-        modules[0]->sample->length.store(length, std::memory_order_relaxed);
-
-        // 4. Extract data directly out of the remaining decoded data stream
-        size_t headerSize = sizeof(uint32_t);
-        size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
-
-
-        // Create temporary pointers pointing to the raw decoded byte stream
-        const float* leftSrc = reinterpret_cast<const float*>(rawData + headerSize);
-        const float* rightSrc = reinterpret_cast<const float*>(rawData + headerSize + channelDataSize);
-
-        // Safely write the standard floats back into your std::atomic<float> vectors
-        for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
-            modules[0]->sample->sampleData[0][i].store(leftSrc[i], std::memory_order_relaxed);
-        }
-        for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
-            modules[0]->sample->sampleData[1][i].store(rightSrc[i], std::memory_order_relaxed);
-        }
-
-
     }
 
     void noteOn(int midiNote, int velocity){
