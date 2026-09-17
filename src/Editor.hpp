@@ -54,8 +54,8 @@ public:
         }
         for(int channel=0;channel<2;channel++)
         {
-            spectrum[channel] = new std::vector<std::complex<float>>  ( MAX_SAMPLE_LENGTH );
-            for(int j=0;j<MAX_SAMPLE_LENGTH;j++)
+            spectrum[channel] = new std::vector<std::complex<float>>  ( MAX_SAMPLE_LENGTH/2+1 );
+            for(int j=0;j<MAX_SAMPLE_LENGTH/2+1;j++)
             {
                 (*spectrum[channel])[j]=std::complex(0,0);
             }
@@ -104,7 +104,6 @@ public:
 
     void calculateFFT(int j){
         //std::vector<std::complex<float>> data_in ( data->length );
-        std::vector<float> data_in ( data->length.load(std::memory_order_relaxed) );
         pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
         pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
         pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
@@ -112,13 +111,15 @@ public:
         stride_in[0]=sizeof ( float );
         stride_out[0]=sizeof ( std::complex<float> );
         bool forward{ pocketfft::FORWARD };                                            // FORWARD or BACKWARD
-
-        float fct{ 2.0f /data->length.load(std::memory_order_relaxed)};    // scaling factor
         shape_in[0]=data->length.load(std::memory_order_relaxed);
+
+        float fct{ 2.0f /shape_in[0]};    // scaling factor
         pocketfft::shape_t axes;
 
         axes.push_back ( 0 );
-        for (int i=0; i<data->length.load(std::memory_order_relaxed); i++ )
+        std::vector<float> data_in ( shape_in[0] );
+
+        for (int i=0; i<shape_in[0]; i++ )
         {
             //data_in[i]=std::complex<float> ( data->sampleData[j][i].load(std::memory_order_relaxed),0.f );
             data_in[i]=data->sampleData[j][i].load(std::memory_order_relaxed);
@@ -134,7 +135,7 @@ public:
             spectrum[j]->data(),
             fct
             );
-        for(int i=0;i<data->length.load(std::memory_order_relaxed)/2;i++)
+        for(int i=0;i<shape_in[0]/2+1;i++)
         {
             if(std::abs((*spectrum[j])[i])<0.000001)
             {
@@ -142,6 +143,7 @@ public:
             }
         }
         (*spectrum[j])[0]/=2;
+        (*spectrum[j])[shape_in[0]/2]/=2;
         isWaveformChanged[j]=false;
 
     }
@@ -151,7 +153,6 @@ public:
 
 
 
-        std::vector<std::complex<float>> data_in ( data->length.load(std::memory_order_relaxed)/2+1 );
         pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
         pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
         pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
@@ -165,10 +166,13 @@ public:
         pocketfft::shape_t axes;
 
         axes.push_back ( 0 );
-        for (int i=0; i<data->length.load(std::memory_order_relaxed)/2; i++ )
+        std::vector<std::complex<float>> data_in ( shape_in[0]/2+1 );
+
+        for (int i=0; i<shape_in[0]/2+1; i++ )
         {
             data_in[i]= (*spectrum[j])[i] ;
         }
+        data_in[shape_in[0]/2]*=2;
         data_in[0]*=2;
 
 
@@ -184,11 +188,11 @@ public:
             );
 
         float maxVal=1;
-        for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
+        for(int k=0;k<shape_in[0];k++){
             (std::abs(waveform[k])>maxVal)&&(maxVal=std::abs(waveform[k]));
         }
         float multiplier=1/maxVal;
-        for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
+        for(int k=0;k<shape_in[0];k++){
             data->sampleData[j][k].store(waveform[k]*multiplier);
 
         }
@@ -250,7 +254,7 @@ public:
 
     void setSpectrumAmplitude(int channel, int x, float y)
     {
-        if(x<0||x>=MAX_SAMPLE_LENGTH/2) return;
+        if(x<0||x>MAX_SAMPLE_LENGTH/2) return;
         (*spectrum[channel])[x]=std::polar(
             (float)std::min(std::max(y,0.f),1.f),
             (float)(std::abs((*spectrum[channel])[x])?std::arg((*spectrum[channel])[x]):-M_PI/2)
@@ -260,7 +264,7 @@ public:
 
     void setSpectrumPhase(int channel, int x, float y)
     {
-        if(x<0||x>=data->length.load(std::memory_order_relaxed)/2||!std::abs((*spectrum[channel])[x])) return;
+        if(x<0||x>data->length.load(std::memory_order_relaxed)/2||!std::abs((*spectrum[channel])[x])) return;
         (*spectrum[channel])[x]=std::polar(
             std::abs((*spectrum[channel])[x]),
             (float)(std::max(y,0.f)-M_PI/2)
@@ -390,7 +394,7 @@ public:
                                 );
                             int newLength=std::max(
                                 data->length.load(std::memory_order_relaxed),
-                                std::max(0,std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x+1))
+                                std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x+1)
                                 );
 
                             data->length.store(newLength, std::memory_order_relaxed);
@@ -417,7 +421,7 @@ public:
                         // Allow the X-axis to scroll and zoom normally
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
                         ImPlot::SetupAxisLinks(ImAxis_X1, &(sharedXMin[channel]), &(sharedXMax[channel]));
-                        ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2, spec);
+                        ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
                         if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
                             if(isWaveformChanged[channel])calculateFFT(channel);
                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
@@ -430,7 +434,7 @@ public:
 
                             int newLength=std::max(
                                 data->length.load(std::memory_order_relaxed),
-                                std::max(0,std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x*2+2))
+                                std::max(0,std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x*2))
                                 );
 
                             data->length.store(newLength, std::memory_order_relaxed);
@@ -454,7 +458,7 @@ public:
                         // Allow the X-axis to scroll and zoom normally
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
                         ImPlot::SetupAxisLinks(ImAxis_X1, &(sharedXMin[channel]), &(sharedXMax[channel]));
-                        ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2, spec);
+                        ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
                         if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
                             if(isWaveformChanged[channel])calculateFFT(channel);
 
