@@ -275,6 +275,9 @@ protected:
                             ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
                         }
                     }
+                    ImGuiIO& io = ImGui::GetIO();
+                    io.MouseClicked[ImGuiMouseButton_Right] = false;
+                    io.MouseDown[ImGuiMouseButton_Right] = false;
 
                 }
             }
