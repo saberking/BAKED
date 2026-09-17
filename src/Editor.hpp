@@ -188,12 +188,10 @@ public:
         float multiplier=1/maxVal;
         for(int k=0;k<data->length.load(std::memory_order_relaxed);k++){
             data->sampleData[j][k].store(waveform[k]*multiplier);
+            (*spectrum[j])[k]*=multiplier;
         }
 
-        if(maxVal>1)
-        {
-            calculateFFT(j);
-        }
+
         isSpectrumChanged[j]=false;
         setDirty();
 
