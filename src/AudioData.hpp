@@ -3,8 +3,11 @@
 #include "DistrhoPlugin.hpp"
 #include "Defines.hpp"
 #include "src/DistrhoDefines.h"
-#include "external/AudioFile.h"
+
+#include "external/dr_wav.h"
 #include <atomic>
+#include <vector>
+#include <iostream>
 
 START_NAMESPACE_DISTRHO
 #define MAX_SAMPLE_LENGTH 960000
@@ -27,36 +30,65 @@ public:
             }
         }
     }
-    void loadWavFile ( const char *filePath)
-    {
 
-        AudioFile<float> audioFile;
-        if(!audioFile.load ( filePath )){
-            std::cout<<"ERRRRRRRRRRRR"<<std::endl;
+    void loadWavFile(const char* filePath)
+    {
+        if (filePath == nullptr) return;
+        std::cout << "load " << filePath << std::endl;
+
+        drwav wav;
+        // Open the WAV file safely
+        if (!drwav_init_file(&wav, filePath, nullptr)) {
+            std::cout << "ERRRRRRRRRRRR (Failed to open file via dr_wav)" << std::endl;
             return;
         }
-        int audioFileChannels = audioFile.getNumChannels();
-        channels.store(std::max(1,std::min(2,audioFileChannels)), std::memory_order_relaxed);
-        std::cout<<"stored channels"<<std::endl;
-        length.store(std::min((int)audioFile.samples[0].size(),MAX_SAMPLE_LENGTH), std::memory_order_relaxed);
+        std::cout << "loaded" << std::endl;
+
+        // dr_wav reads totalPCMFrameCount (the sample length of a single channel)
+        int audioFileChannels = wav.channels;
+        int totalFrames = (int)wav.totalPCMFrameCount;
+        std::cout << audioFileChannels << " channels" << std::endl;
+
+        channels.store(std::max(1, std::min(2, audioFileChannels)), std::memory_order_relaxed);
+        std::cout << "stored channels" << std::endl;
+
+        // Bind buffer limit sizes safely
+        int tempLength = std::min(totalFrames, MAX_SAMPLE_LENGTH);
+        length.store(tempLength, std::memory_order_relaxed);
+
+        // Allocate an intermediate heap buffer to hold the interleaved float data
+        // Size is frames * channels because dr_wav reads channels consecutively
+        size_t totalSamplesToRead = (size_t)tempLength * audioFileChannels;
+        std::vector<float> pcmData(totalSamplesToRead);
+
+        // Read the file data converted into native 32-bit floats automatically
+        drwav_read_pcm_frames_f32(&wav, tempLength, pcmData.data());
+
+        // Close the file handle immediately after reading into system memory
+        drwav_uninit(&wav);
+
         float temp;
-        for(int i=0;i<length.load(std::memory_order_relaxed)&&i<MAX_SAMPLE_LENGTH;i++)
+        for (int i = 0; i < tempLength; i++)
         {
-            if(maxChannels==2){
-                sampleData[0][i].store(audioFile.samples[0][i], std::memory_order_relaxed);
-                sampleData[1][i].store(audioFile.samples[audioFileChannels>=2?1:0][i],std::memory_order_relaxed);
-            }else{
-                temp=audioFile.samples[0][i];//this is for loading sample as release curve
-                if(audioFileChannels>=2){
-                    temp=(temp+audioFile.samples[1][i])/2;
+            // Calculate the interleaved stride index positions
+            int ch0Index = i * audioFileChannels;
+            int ch1Index = (audioFileChannels >= 2) ? (ch0Index + 1) : ch0Index;
+
+            if (maxChannels == 2) {
+                sampleData[0][i].store(pcmData[ch0Index], std::memory_order_relaxed);
+                sampleData[1][i].store(pcmData[ch1Index], std::memory_order_relaxed);
+            } else {
+                temp = pcmData[ch0Index]; // Used for loading sample as release curve
+                if (audioFileChannels >= 2) {
+                    temp = (temp + pcmData[ch1Index]) / 2.0f;
                 }
                 sampleData[0][i].store(temp, std::memory_order_relaxed);
             }
-
         }
-        std::cout<<"length: "<<length.load(std::memory_order_relaxed)<<"\n\n";
 
+        std::cout << "length: " << length.load(std::memory_order_relaxed) << "\n\n";
     }
+
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioData)
 };
 struct Module;

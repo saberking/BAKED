@@ -11,6 +11,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <ole2.h>
+#include <iostream>
 
 START_NAMESPACE_DISTRHO
 
@@ -83,6 +84,7 @@ public:
 
             if (DragQueryFileA(hDrop, 0, droppedPath, MAX_PATH))
             {
+                std::cout<<"query"<<std::endl;
                 if (m_receiver != nullptr) {
                     m_receiver->setDroppedFilePath(droppedPath);
                 }

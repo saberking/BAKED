@@ -9,6 +9,8 @@
 #include "ResizeHandle.hpp"
 #include "Parameters.hpp"
 #include "DragAndDrop.hpp"
+#define DR_WAV_IMPLEMENTATION
+
 #include "Editor.hpp"
 #include "PluginDSP.hpp"
 #include <../clap/include/clap/ext/context-menu.h>
