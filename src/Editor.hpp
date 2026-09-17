@@ -36,6 +36,7 @@ public:
     bool isDragging=false;
     float  dragStartY;
     int dragStartX;
+    double sharedXMax[2], sharedXMin[2];
 
     SampleEditor(const char *_name, Module *_module, Window& window,
                  std::function<void(const char*)> _fileDropped, std::function<void()> _setDirty
@@ -65,6 +66,8 @@ public:
         for(int channel=0;channel<2;channel++)
         {
             calculateFFT(channel);
+            sharedXMax[channel]=100;
+            sharedXMin[channel]=-2;
         }
     }
 
@@ -403,7 +406,7 @@ public:
 
                         // Allow the X-axis to scroll and zoom normally
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
-                        ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 100.f, ImPlotCond_Once);
+                        ImPlot::SetupAxisLinks(ImAxis_X1, &(sharedXMin[channel]), &(sharedXMax[channel]));
                         ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2, spec);
                         if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
                             if(isWaveformChanged[channel])calculateFFT(channel);
@@ -438,7 +441,7 @@ public:
 
                         // Allow the X-axis to scroll and zoom normally
                         ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
-                        ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 100.f, ImPlotCond_Once);
+                        ImPlot::SetupAxisLinks(ImAxis_X1, &(sharedXMin[channel]), &(sharedXMax[channel]));
                         ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2, spec);
                         if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
                             if(isWaveformChanged[channel])calculateFFT(channel);

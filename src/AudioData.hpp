@@ -36,9 +36,9 @@ public:
             return;
         }
         int audioFileChannels = audioFile.getNumChannels();
-        channels.store(audioFileChannels, std::memory_order_relaxed);
+        channels.store(std::max(1,std::min(2,audioFileChannels)), std::memory_order_relaxed);
         std::cout<<"stored channels"<<std::endl;
-        length.store(audioFile.samples[0].size(), std::memory_order_relaxed);
+        length.store(std::min((int)audioFile.samples[0].size(),MAX_SAMPLE_LENGTH), std::memory_order_relaxed);
         float temp;
         for(int i=0;i<length.load(std::memory_order_relaxed)&&i<MAX_SAMPLE_LENGTH;i++)
         {
@@ -46,7 +46,7 @@ public:
                 sampleData[0][i].store(audioFile.samples[0][i], std::memory_order_relaxed);
                 sampleData[1][i].store(audioFile.samples[audioFileChannels>=2?1:0][i],std::memory_order_relaxed);
             }else{
-                temp=audioFile.samples[0][i];
+                temp=audioFile.samples[0][i];//this is for loading sample as release curve
                 if(audioFileChannels>=2){
                     temp=(temp+audioFile.samples[1][i])/2;
                 }
