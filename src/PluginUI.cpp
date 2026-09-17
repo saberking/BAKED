@@ -12,6 +12,8 @@
 #include "Editor.hpp"
 #include "PluginDSP.hpp"
 #include <../clap/include/clap/ext/context-menu.h>
+#include <../clap/include/clap/ext/state.h>
+#include <../clap/include/clap/ext/params.h>
 #include <windows.h>
 #include <commctrl.h> // For SetWindowSubclass API
 #pragma comment(lib, "comctl32.lib")
@@ -90,12 +92,34 @@ public:
     }
 
     void setDirty(){
-        editParameter(kParamSpeed, true);  // Tells DAW: "User is actively clicking/modifying a parameter"
 
-        // Pass the exact current speed value back into itself so the knob position doesn't visually jump
-        setParameterValue(kParamSpeed, fSpeed);
+        std::cout<<"setting dirty"<<std::endl;
+        auto* clapPointer=reinterpret_cast<const clap_host_t*>(getPluginDPSPointer()->host);
+        auto* hostState = reinterpret_cast<const clap_host_state_t*>(clapPointer->get_extension(clapPointer, CLAP_EXT_STATE));
+        if (hostState != nullptr && hostState->mark_dirty != nullptr) {
+            std::cout << "UI: Found CLAP State extension, forcing FL Studio dirty flag..." << std::endl;
 
-        editParameter(kParamSpeed, false);
+
+             hostState->mark_dirty(clapPointer);
+        } else {
+            std::cout << "UI: Host does not support mark_dirty or state extension." << std::endl;
+        }
+
+        // auto* hostParams = reinterpret_cast<const clap_host_params_t*>(
+        //     clapPointer->get_extension(clapPointer, CLAP_EXT_PARAMS)
+        //     );
+
+        // if (hostParams != nullptr && hostParams->rescan != nullptr) {
+        //     std::cout << "UI: Triggering lightweight parameter rescan to flag FL Studio..." << std::endl;
+
+        //     hostParams->rescan(clapPointer, CLAP_PARAM_RESCAN_TEXT);
+        // }
+
+        // if (hostParams != nullptr && hostParams->request_flush != nullptr) {
+        //     std::cout << "UI: Executing direct CLAP thread flush to force FL Studio dirty flag..." << std::endl;
+
+        //     hostParams->request_flush(clapPointer);
+        // }
     }
 
     Window& getWindow() const override {
