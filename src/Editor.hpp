@@ -247,7 +247,7 @@ public:
     void setSpectrumAmplitude(int channel, int x, float y)
     {
         (*spectrum[channel])[x]=std::polar(
-            (float)std::max(y,0.f),
+            (float)std::min(std::max(y,0.f),1.f),
             (float)(std::abs((*spectrum[channel])[x])?std::arg((*spectrum[channel])[x]):-M_PI/2)
             );
         isSpectrumChanged[channel]=true;
@@ -401,7 +401,7 @@ public:
                     if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L")){
                         setInputMap();
                         ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.0, ImPlotCond_Always);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
                         ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
                         // Allow the X-axis to scroll and zoom normally
