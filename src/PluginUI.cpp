@@ -67,7 +67,6 @@ public:
             [this](){this->setDirty();}
             );
 
-        editor->show();
     }
 
     bool checkIfClapAtRuntime()
@@ -233,9 +232,10 @@ protected:
 
             //     ImGui::Unindent();
             // }
-            if (!editor->isVisible()&&ImGui::Button("Edit sample"))
+            if (ImGui::Button("Edit sample"))
             {
                 editor->show();
+                editor->focus();
             }
             ImGui::Separator();
             ImGui::Spacing();
