@@ -57,7 +57,7 @@ public:
         }
         //const double scaleFactor = getScaleFactor();
         //setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
-        setSize(1650,980);
+        setSize(1600,980);
 
         if (isResizable())
             fResizeHandle.hide();
