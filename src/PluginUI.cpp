@@ -57,7 +57,7 @@ public:
         }
         //const double scaleFactor = getScaleFactor();
         //setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
-        setSize(1850,980);
+        setSize(1650,980);
 
         if (isResizable())
             fResizeHandle.hide();
@@ -263,7 +263,7 @@ protected:
             if (ImGui::BeginTable("my_resizable_table", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit))
             {
                 // Provide an initial width (e.g., 150.0f). The user can drag to resize it.
-                ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthFixed, 1400.0f);
+                ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthFixed, 1225.0f);
                 ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableNextColumn();
                 editor->display();
