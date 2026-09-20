@@ -55,9 +55,9 @@ public:
             std::cout<<"setwindowsublcass\n";
             ::SetWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this), 0);
         }
-        const double scaleFactor = getScaleFactor();
-        setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
-
+        //const double scaleFactor = getScaleFactor();
+        //setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
+        setSize(1850,980);
 
         if (isResizable())
             fResizeHandle.hide();
@@ -102,15 +102,7 @@ public:
     }
 
     void stateChanged(const char* key, const char* value){
-        // if(!strcmp(key, "loadedTrigger"))
-        // {
-        //     editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels.load(std::memory_order_relaxed)==1);
-        //     for(int i =0;i<2;i++)
-        //     {
-        //         editor->calculateFFT(i);
 
-        //     }
-        // }
     }
 
     ImGuiPluginDSP* getPluginDPSPointer(){
@@ -145,20 +137,6 @@ public:
                 hostState->mark_dirty(clapPointer);
             }
         }
-
-        // auto* hostParams = reinterpret_cast<const clap_host_params_t*>(
-        //     clapPointer->get_extension(clapPointer, CLAP_EXT_PARAMS)
-        //     );
-
-        // if (hostParams != nullptr && hostParams->rescan != nullptr) {
-
-        //     hostParams->rescan(clapPointer, CLAP_PARAM_RESCAN_TEXT);
-        // }
-
-        // if (hostParams != nullptr && hostParams->request_flush != nullptr) {
-
-        //     hostParams->request_flush(clapPointer);
-        // }
     }
 
     Window& getWindow() const override {
@@ -168,9 +146,6 @@ public:
     static LRESULT CALLBACK SubclassMenuProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
                                              UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
     {
-
-
-
         if (uMsg == WM_TRIGGER_CLAP_MENU)
         {
             // Safely extract the heap data passed through the OS message queue
@@ -212,79 +187,97 @@ protected:
         repaint();
     }
 
+    void displayPlaybackControls()
+    {
+
+
+        // 3. Set the slider width to stretch up to that text boundary
+        ImGui::SetNextItemWidth(-100.f);        if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
+        {
+            if (ImGui::IsItemActivated())
+                editParameter(kParamSpeed, true);
+
+            setParameterValue(kParamSpeed, fSpeed);
+
+        }
+        const uint32_t activeFormat = getPluginFormat();
+        if (activeFormat == 1)
+        {
+            if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+            {
+                const clap_host_t* host=static_cast<const clap_host_t*>(getPluginDPSPointer()->host);
+                HWND hwnd = reinterpret_cast<HWND>(getWindow().getNativeWindowHandle());
+
+                if(host){
+                    // Query DAW for the context menu extension
+                    auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
+                    std::cout<<"menuExt"<<std::endl;
+                    if (menuExt && menuExt->popup)
+                    {
+                        std::cout<<"pop"<<std::endl;
+
+
+                        ImVec2 mousePos = ImGui::GetMousePos();
+
+                        auto* payload = new AsyncMenuPayload();
+                        payload->host = host;
+                        payload->screenX = mousePos.x;
+                        payload->screenY = mousePos.y;
+
+                        ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
+                    }
+                }
+                ImGuiIO& io = ImGui::GetIO();
+                io.MouseClicked[ImGuiMouseButton_Right] = false;
+                io.MouseDown[ImGuiMouseButton_Right] = false;
+
+            }
+        }
+        if (ImGui::IsItemDeactivated())
+        {
+            editParameter(kParamSpeed, false);
+        }
+    }
+
     void onImGuiDisplay() override {
 
 
         const float width = getWidth();
         const float height = getHeight();
-        const float margin = 20.0f * getScaleFactor();
+        //const float margin = 20.0f * getScaleFactor();
 
-        ImGui::SetNextWindowPos(ImVec2(margin, margin));
-        ImGui::SetNextWindowSize(ImVec2(width - 2 * margin, height - 2 * margin));
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(width , height ));
 
-        if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize))
+        if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar))
         {
-            // ImGui::Text("Filepath: %s", sampleFilePath);
-            // if (ImGui::CollapsingHeader("Sample Editor"))
+
+            // if (ImGui::Button("Edit sample"))
             // {
-            //     ImGui::Indent();
-            //     editor->render();
-
-            //     ImGui::Unindent();
+            //     editor->show();
+            //     editor->focus();
             // }
-            if (ImGui::Button("Edit sample"))
+            // ImGui::Separator();
+            // ImGui::Spacing();
+
+            if (ImGui::BeginTable("my_resizable_table", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit))
             {
-                editor->show();
-                editor->focus();
+                // Provide an initial width (e.g., 150.0f). The user can drag to resize it.
+                ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthFixed, 1400.0f);
+                ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableNextColumn();
+                editor->display();
+
+                ImGui::TableNextColumn();
+
+
+                displayPlaybackControls();
+
+                ImGui::EndTable();
             }
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
-            {
-                if (ImGui::IsItemActivated())
-                    editParameter(kParamSpeed, true);
-
-                setParameterValue(kParamSpeed, fSpeed);
-
-            }
-            const uint32_t activeFormat = getPluginFormat();
-            if (activeFormat == 1)
-            {
-                if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-                {
-                    const clap_host_t* host=static_cast<const clap_host_t*>(getPluginDPSPointer()->host);
-                    HWND hwnd = reinterpret_cast<HWND>(getWindow().getNativeWindowHandle());
-
-                    if(host){
-                        // Query DAW for the context menu extension
-                        auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
-                        std::cout<<"menuExt"<<std::endl;
-                        if (menuExt && menuExt->popup)
-                        {
-                            std::cout<<"pop"<<std::endl;
 
 
-                            ImVec2 mousePos = ImGui::GetMousePos();
 
-                            auto* payload = new AsyncMenuPayload();
-                            payload->host = host;
-                            payload->screenX = mousePos.x;
-                            payload->screenY = mousePos.y;
-
-                            ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
-                        }
-                    }
-                    ImGuiIO& io = ImGui::GetIO();
-                    io.MouseClicked[ImGuiMouseButton_Right] = false;
-                    io.MouseDown[ImGuiMouseButton_Right] = false;
-
-                }
-            }
-            if (ImGui::IsItemDeactivated())
-            {
-                editParameter(kParamSpeed, false);
-            }
         }
         ImGui::End();
 
