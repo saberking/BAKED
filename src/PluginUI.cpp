@@ -38,7 +38,9 @@ class ImGuiPluginUI : public UI, public FileDropReceiver
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
     SampleEditor *editor=NULL;
     MyOleDropTarget *oleDropTarget=NULL;
-    bool editorWasOpen=true;
+    ImPlotContext* imPlotContext[8];
+    bool editEnvelope=true;
+
 public:
 
     ImGuiPluginUI()
@@ -61,10 +63,16 @@ public:
 
         if (isResizable())
             fResizeHandle.hide();
+
+        for(int i=0;i<8;i++){
+            imPlotContext[i]=ImPlot::CreateContext();
+        }
+
         oleDropTarget=new MyOleDropTarget(this);
         editor=new SampleEditor("Sample Editor", getPluginDPSPointer()->modules[0], getWindow(),
             [this](const char* path) {this->setDroppedFilePath(path);},
-            [this](){this->setDirty();}
+            [this](){this->setDirty();},
+            imPlotContext
             );
 
     }
@@ -238,6 +246,78 @@ protected:
             editParameter(kParamSpeed, false);
         }
     }
+    static ImPlotPoint envelopeGetter(int idx, void* data_ptr) {
+        auto* vec_ptr = static_cast<std::vector<std::atomic<float>>*>(data_ptr);
+        float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
+        return ImPlotPoint(idx, y_val);
+    }
+
+
+    void setEnvelope(int x, float y)
+    {
+        if(x<0||x>=ENVELOPE_LENGTH) return;
+        getPluginDPSPointer()->modules[0]->envelope[x].store(std::max(0.f,std::min(1.f,y)), std::memory_order_relaxed);
+        setDirty();
+    }
+    void displayEnvelope(){
+        ImPlot::SetCurrentContext(imPlotContext[6]);
+        if(ImPlot::BeginPlot("Envelope",ImVec2(-1.0f, 200.0f))){
+            editor->setInputMap(editEnvelope);
+
+            ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
+            ImPlot::SetupAxisScale(ImAxis_Y1, editor->TransformForward_Sqrt, editor->TransformInverse_Sqrt);
+
+            // Allow the X-axis to scroll and zoom normally
+            ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoGridLines|ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
+            ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
+            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -10.0, 209.0);
+            ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, 219.0);
+            // 2. Define the vertical boundaries for your lines
+            double y_start = 0; // Change to your desired bottom Y value
+            double y_end   =  1; // Change to your desired top Y value
+
+
+
+            ImU32 line_color = ImGui::ColorConvertFloat4ToU32(ImVec4(0.5f, 0.5f, 0.5f, 0.6f));
+            // 3. Draw the lines (using "##" hides them from the legend)
+            ImVec2 zero_top = ImPlot::PlotToPixels(ImPlotPoint(0.0, 1.0));
+            ImVec2 zero_bottom = ImPlot::PlotToPixels(ImPlotPoint(0.0, 0.0));
+            ImPlot::GetPlotDrawList()->AddLine(zero_top, zero_bottom, line_color, 1.5f);
+
+            // Line at 200 (From top to bottom)
+            ImVec2 two_hundred_top = ImPlot::PlotToPixels(ImPlotPoint(200.0, 1.0));
+            ImVec2 two_hundred_bottom = ImPlot::PlotToPixels(ImPlotPoint(200.0, 0.0));
+            ImPlot::GetPlotDrawList()->AddLine(two_hundred_top, two_hundred_bottom, line_color, 1.5f);
+            // ... (Your previous PlotScatterG and vertical line code here) ...
+
+            // Line at 0 (From X=0 to X=200)
+            ImVec2 zero_left  = ImPlot::PlotToPixels(ImPlotPoint(0.0, 0.0));
+            ImVec2 zero_right = ImPlot::PlotToPixels(ImPlotPoint(200.0, 0.0));
+            ImPlot::GetPlotDrawList()->AddLine(zero_left, zero_right, line_color, 1.5f);
+
+            // Line at 1 (From X=0 to X=200)
+            ImVec2 one_left   = ImPlot::PlotToPixels(ImPlotPoint(0.0, 1.0));
+            ImVec2 one_right  = ImPlot::PlotToPixels(ImPlotPoint(200.0, 1.0));
+            ImPlot::GetPlotDrawList()->AddLine(one_left, one_right, line_color, 1.5f);
+
+            // ... (Your hover interaction handling and EndPlot here) ...
+
+
+            ImPlot::PlotScatterG("Envelope", envelopeGetter, &getPluginDPSPointer()->modules[0]->envelope, ENVELOPE_LENGTH, editor->spec);
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editEnvelope) {
+                ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+
+                editor->handleDrag(
+                    (int)current_pos.x,current_pos.y,
+                    [this](int x, float y, int channelDummy){this->setEnvelope(x,y);}
+                    );
+
+            }
+            ImPlot::EndPlot();
+
+        }
+    }
 
     void onImGuiDisplay() override {
 
@@ -272,6 +352,7 @@ protected:
 
 
                 displayPlaybackControls();
+                displayEnvelope();
 
                 ImGui::EndTable();
             }

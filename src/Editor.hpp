@@ -25,7 +25,7 @@ public:
     ImPlotSpec spec;
     bool editMode=false;
     bool isMono;
-    ImPlotContext* imPlotContext[6];
+    ImPlotContext** imPlotContext;
     std::vector<std::complex<float>> *spectrum[2] ;
     bool isSpectrumChanged[2];
     bool isLiveUpdate=true;
@@ -39,7 +39,8 @@ public:
     double sharedXMax[2], sharedXMin[2];
 
     SampleEditor(const char *_name, Module *_module, Window& window,
-                 std::function<void(const char*)> _fileDropped, std::function<void()> _setDirty
+                 std::function<void(const char*)> _fileDropped, std::function<void()> _setDirty,
+                 ImPlotContext* _imPlotContext [8]
         )
         //:DGL::ImGuiStandaloneWindow(window.getApp(), window)
     {
@@ -47,12 +48,11 @@ public:
         //fileDropped=_fileDropped;
         setDirty=_setDirty;
         data=module->sample;
+        imPlotContext=_imPlotContext;
         spec.Flags = ImPlotFlags_CanvasOnly;
         //setResizable(true);
         //setSize(1400,970);
-        for(int i=0;i<6;i++){
-            imPlotContext[i]=ImPlot::CreateContext();
-        }
+
         for(int channel=0;channel<2;channel++)
         {
             spectrum[channel] = new std::vector<std::complex<float>>  ( MAX_SAMPLE_LENGTH/2+1 );
@@ -207,9 +207,9 @@ public:
 
     }
 
-    void setInputMap(){
+    void setInputMap(bool editing){
         ImPlotInputMap &inputMap=ImPlot::GetInputMap();
-        if (editMode)
+        if (editing)
         {
             inputMap.Pan = ImGuiMouseButton_Right;
 
@@ -227,7 +227,7 @@ public:
         for(int i=0;i<MAX_POLY;i++){
             if(module->playbackData[i]->playing){
                 double playhead = module->playbackData[i]->playhead;
-                ImPlot::DragLineX(0, &playhead, ImVec4(0.5,0.5,0.5,0.5), 0.5f, ImPlotDragToolFlags_NoInputs);
+                ImPlot::DragLineX(i, &playhead, ImVec4(0.5,0.5,0.5,0.5), 0.5f, ImPlotDragToolFlags_NoInputs);
             }
         }
     }
@@ -245,7 +245,7 @@ public:
         return std::max(-1.f,std::min(1.f,input));
     }
 
-    void setWaveformSample(int channel, int x, float y)
+    void setWaveformSample(int x, float y, int channel)
     {
         if(x<0||x>=MAX_SAMPLE_LENGTH) return;
         data->sampleData[channel][x].store(clip(y));
@@ -253,7 +253,7 @@ public:
         setDirty();
     }
 
-    void setSpectrumAmplitude(int channel, int x, float y)
+    void setSpectrumAmplitude(int x, float y, int channel)
     {
         if(x<0||x>MAX_SAMPLE_LENGTH/2) return;
         (*spectrum[channel])[x]=std::polar(
@@ -263,7 +263,7 @@ public:
         isSpectrumChanged[channel]=true;
     }
 
-    void setSpectrumPhase(int channel, int x, float y)
+    void setSpectrumPhase(int x, float y, int channel)
     {
         if(x<0||x>data->length.load(std::memory_order_relaxed)/2||!std::abs((*spectrum[channel])[x])) return;
         (*spectrum[channel])[x]=std::polar(
@@ -273,7 +273,7 @@ public:
         isSpectrumChanged[channel]=true;
     }
 
-    void handleDrag(int channel, int x, float y, std::function<void(int, int, float)> callback)
+    void handleDrag(int x, float y, std::function<void(int, float, int)> callback, int channel=0)
     {
         if(isDragging){
             int xStep = x>dragStartX?1:-1;
@@ -281,10 +281,10 @@ public:
             float yStep =(y-dragStartY)/noOfSteps;
             for(int index=0;index<noOfSteps;index++)
             {
-                callback(channel,dragStartX+index*xStep, dragStartY+index*yStep);
+                callback(dragStartX+index*xStep, dragStartY+index*yStep, channel);
             }
         }else{
-            callback(channel,x, y);
+            callback(x, y, channel);
         }
         isDragging=true;
         dragStartX=x;
@@ -369,7 +369,7 @@ public:
 
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
                 if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L")){
-                    setInputMap();
+                    setInputMap(editMode);
 
                     ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
@@ -384,8 +384,9 @@ public:
                         ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
                         handleDrag(
-                            channel, (int)current_pos.x,current_pos.y,
-                            [this](int channel, int x, float y){this->setWaveformSample(channel,x,y);}
+                            (int)current_pos.x,current_pos.y,
+                            [this]( int x, float y, int channel){this->setWaveformSample(x,y,channel);},
+                            channel
                             );
                         int newLength=std::max(
                             data->length.load(std::memory_order_relaxed),
@@ -408,7 +409,7 @@ public:
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
 
                 if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L")){
-                    setInputMap();
+                    setInputMap(editMode);
                     ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
                     ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
@@ -423,8 +424,9 @@ public:
                         //(*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
 
                         handleDrag(
-                            channel, (int)current_pos.x,current_pos.y,
-                            [this](int channel, int x, float y){this->setSpectrumAmplitude(channel,x,y);}
+                            (int)current_pos.x,current_pos.y,
+                            [this](int x, float y, int channel){this->setSpectrumAmplitude(x,y,channel);},
+                            channel
                             );
 
                         int newLength=std::max(
@@ -446,7 +448,7 @@ public:
 
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
                 if (ImPlot::BeginPlot(channel?"Phase R":"Phase L")){
-                    setInputMap();
+                    setInputMap(editMode);
                     ImPlot::SetupAxis(ImAxis_Y1, "Phase", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
 
@@ -460,8 +462,9 @@ public:
                         ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
                         handleDrag(
-                            channel, (int)current_pos.x,current_pos.y,
-                            [this](int channel, int x, float y){this->setSpectrumPhase(channel,x,y);}
+                            (int)current_pos.x,current_pos.y,
+                            [this](int x, float y, int channel){this->setSpectrumPhase(x,y,channel);},
+                            channel
                             );
                         if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
                     }

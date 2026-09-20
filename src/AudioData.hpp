@@ -12,6 +12,7 @@
 START_NAMESPACE_DISTRHO
 #define MAX_SAMPLE_LENGTH 960000
 #define MAX_POLY 128
+#define ENVELOPE_LENGTH 200
 
 class AudioData
 {
@@ -30,6 +31,7 @@ public:
             }
         }
     }
+
 
     void loadWavFile(const char* filePath)
     {
@@ -91,6 +93,8 @@ public:
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioData)
 };
+
+
 struct Module;
 struct SamplePlaybackEngineMonophonic {
     Module *module=NULL;
@@ -103,9 +107,11 @@ struct SamplePlaybackEngineMonophonic {
     inline void stop();
     inline void noteOn(int _midiNote, int _velocity);
     inline void noteOff(int _midiNote);
-    inline void run(float outputs[2]);
+    inline void run(float outputs[2], float recipLength);
     SamplePlaybackEngineMonophonic(Module *_module);
-    inline float getReleaseValue();
+    inline float getReleaseValue(float recipLength);
+    inline float getEnvelopeValue(float recipLength);
+
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SamplePlaybackEngineMonophonic)
 
 };
@@ -117,6 +123,8 @@ struct Module {
     float *speed=NULL;
     bool *releaseEnabled=NULL;
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
+    std::vector<std::atomic<float>> envelope;
+
     SamplePlaybackEngineMonophonic * playbackData[MAX_POLY];
 
     Module(std::vector<float *> _levels, float *_releaseSpeed, float *_speed, bool *_releaseEnabled):
@@ -130,6 +138,11 @@ struct Module {
         releaseCurve=new AudioData(1);
         for(int i=0;i<MAX_POLY;i++){
             playbackData[i]=new SamplePlaybackEngineMonophonic(this);
+        }
+        envelope = std::vector<std::atomic<float>>(ENVELOPE_LENGTH);
+        for(int i=0;i<ENVELOPE_LENGTH;i++)
+        {
+            envelope[i].store(1.f, std::memory_order_relaxed);
         }
     }
     ~Module(){
@@ -156,12 +169,14 @@ struct Module {
     }
 
     void run(float outputs[2]){
+        float recipLength=((float)ENVELOPE_LENGTH)/((float)std::max(1,sample->length.load(std::memory_order_relaxed)));
+
         outputs[0]=outputs[1]=0;
         float tempOuts[2];
         for(int i=0;i<MAX_POLY;i++){
             if(playbackData[i]->playing)
             {
-                playbackData[i]->run(tempOuts);
+                playbackData[i]->run(tempOuts, recipLength);
                 outputs[0]+=tempOuts[0];outputs[1]+=tempOuts[1];
             }
         }
@@ -172,10 +187,14 @@ struct Module {
 
 inline SamplePlaybackEngineMonophonic::  SamplePlaybackEngineMonophonic(Module *_module):
     module(_module){}
-inline float SamplePlaybackEngineMonophonic::getReleaseValue(){
+inline float SamplePlaybackEngineMonophonic::getReleaseValue(float recipLength){
     if(!playing) return 0;
     if(!released) return 1;
     return module->releaseCurve->sampleData[0][(int)releasePlayhead].load(std::memory_order_relaxed);
+}
+inline float SamplePlaybackEngineMonophonic::getEnvelopeValue(float recipLength){
+    if(!playing) return 0;
+    return module->envelope[(int)(playhead*recipLength)].load(std::memory_order_relaxed);
 }
 inline void SamplePlaybackEngineMonophonic::timeStep(){
     if(playing){
@@ -208,15 +227,19 @@ inline void SamplePlaybackEngineMonophonic::noteOff(int _midiNote){
         released=true;
     }
 }
-inline void SamplePlaybackEngineMonophonic::run(float outputs[2]){
+inline void SamplePlaybackEngineMonophonic::run(float outputs[2], float recipLength){
     outputs[0]=outputs[1]=0;
     if(playhead>module->sample->length.load(std::memory_order_relaxed)-1){
         stop();
         return;
     }
-    outputs[0]=outputs[1]=module->sample->sampleData[0][(int)playhead].load(std::memory_order_relaxed)*getReleaseValue();
+    outputs[0]=outputs[1]=module->sample->sampleData[0][(int)playhead].load(std::memory_order_relaxed)
+                              *getEnvelopeValue(recipLength)*getReleaseValue(recipLength)
+        ;
     if(module->sample->channels.load(std::memory_order_relaxed)==2){
-        outputs[1]=module->sample->sampleData[1][(int)playhead].load(std::memory_order_relaxed)*getReleaseValue();
+        outputs[1]=module->sample->sampleData[1][(int)playhead].load(std::memory_order_relaxed)
+                     *getEnvelopeValue(recipLength)*getReleaseValue(recipLength)
+            ;
     }
     timeStep();
 }
