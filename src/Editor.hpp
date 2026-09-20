@@ -8,6 +8,12 @@
 #include "external/implot_internal.h"
 #include "external/pocketfft_hdronly.h"
 #include "DragAndDrop.hpp"
+#include <../clap/include/clap/ext/context-menu.h>
+#include <../clap/include/clap/ext/state.h>
+#include <../clap/include/clap/ext/params.h>
+#include <windows.h>
+#include <commctrl.h> // For SetWindowSubclass API
+#include "PluginDSP.hpp"
 
 
 START_NAMESPACE_DISTRHO
@@ -17,7 +23,15 @@ struct PlotAudioContext {
     int channel;
 };
 
-class SampleEditor //: public DGL::ImGuiStandaloneWindow, public FileDropReceiver
+static UINT WM_TRIGGER_CLAP_MENU = 0;
+struct AsyncMenuPayload {//for right click autmoaiton clip
+    const clap_host_t* host;
+    int32_t screenX;
+    int32_t screenY;
+};
+
+
+class SampleEditor : public DGL::ImGuiStandaloneWindow, public FileDropReceiver
 {
 public:
     AudioData *data=NULL;
@@ -32,26 +46,38 @@ public:
     bool isWaveformChanged[2];
     std::function<void(const char*)> fileDropped;
     std::function<void()> setDirty;
+    std::function<void(int, bool)> editParameter;
+    std::function<void(int, float)> setParameterValue;
     int length;
     bool isDragging=false;
     float  dragStartY;
     int dragStartX;
     double sharedXMax[2], sharedXMin[2];
+    float fSpeed = 1.f;
+    ImGuiPluginDSP *dspPointer;
+    Window *parentWindow;
 
-    SampleEditor(const char *_name, Module *_module, Window& window,
+    SampleEditor(const char *_name, Module *_module, Window& _window,
                  std::function<void(const char*)> _fileDropped, std::function<void()> _setDirty,
-                 ImPlotContext* _imPlotContext [8]
+                 ImPlotContext* _imPlotContext [8],
+                 std::function<void(int, bool)> _editParameter,
+                 std::function<void(int, float)> _setParameterValue,
+                 ImGuiPluginDSP *_dSPPointer
         )
-        //:DGL::ImGuiStandaloneWindow(window.getApp(), window)
+        :DGL::ImGuiStandaloneWindow(_window.getApp(), _window)
     {
+        parentWindow=&_window;
         module=_module;
-        //fileDropped=_fileDropped;
+        fileDropped=_fileDropped;
         setDirty=_setDirty;
         data=module->sample;
         imPlotContext=_imPlotContext;
+        editParameter=_editParameter;
+        setParameterValue=_setParameterValue;
+        dspPointer=_dSPPointer;
         spec.Flags = ImPlotFlags_CanvasOnly;
-        //setResizable(true);
-        //setSize(1400,970);
+        setResizable(true);
+        setSize(1675,1000);
 
         for(int channel=0;channel<2;channel++)
         {
@@ -70,14 +96,92 @@ public:
             sharedXMax[channel]=100;
             sharedXMin[channel]=-2;
         }
+
+        WM_TRIGGER_CLAP_MENU = ::RegisterWindowMessageA("MyUniquePlugin_ClapContextMenu_TriggerMsg");
+        HWND hwnd = (HWND)getWindow().getNativeWindowHandle();
+        const uint32_t activeFormat = getPluginFormat();
+
+        if (activeFormat == 1)
+        {
+            std::cout<<"setwindowsublcass\n";
+            ::SetWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this), 0);
+        }
+    }
+    static LRESULT CALLBACK SubclassMenuProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
+                                             UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+    {
+        if (uMsg == WM_TRIGGER_CLAP_MENU)
+        {
+            // Safely extract the heap data passed through the OS message queue
+            auto* payload = reinterpret_cast<AsyncMenuPayload*>(wParam);
+            if (payload)
+            {
+                if(payload->host)
+                {
+                    std::cout<<"LRESULT CALLBACK"<<std::endl;
+                    auto* menuExt = (const clap_host_context_menu_t*)payload->host->get_extension(payload->host, CLAP_EXT_CONTEXT_MENU);
+                    if (menuExt && menuExt->popup)
+                    {
+                        clap_context_menu_target_t target;
+                        target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
+                        target.id = kParamSpeed;
+
+                        // Open the menu cleanly outside of the active ImGui/DPF render cycle.
+                        // This un-freezes both windows and eliminates the multi-instance crash!
+                        menuExt->popup(payload->host, &target, 0, payload->screenX, payload->screenY);
+                    }
+
+
+                }
+                // Delete the temporary payload allocation immediately after use
+                delete payload;
+
+            }
+            return 0;
+        }
+
+
+        // Pass every other standard OS window message safely back to DPF
+        return ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
 
-    // Window& getWindow() const override {
-    //     return DGL::ImGuiStandaloneWindow::getWindow();
-    // }
-    // void setDroppedFilePath(const char* path) override {
-    //     fileDropped(path);
-    // }
+    bool checkIfClapAtRuntime()
+    {
+        char fileBuffer[MAX_PATH] = {0};
+        HMODULE hModule = NULL;
+
+        // 🟢 Create a dummy static variable. It lives inside your plugin library's binary memory space.
+        static const int dummyAnchor = 0;
+
+        // 🟢 Pass the address of the dummy anchor variable instead of the member function pointer
+        GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCSTR>(&dummyAnchor), &hModule);
+
+        if (hModule) {
+            GetModuleFileNameA(hModule, fileBuffer, sizeof(fileBuffer));
+            std::string binaryPath(fileBuffer);
+
+            std::transform(binaryPath.begin(), binaryPath.end(), binaryPath.begin(), ::tolower);
+
+            std::string target = ".clap";
+            if (binaryPath.length() >= target.length()) {
+                return (binaryPath.compare(binaryPath.length() - target.length(), target.length(), target) == 0);
+            }
+        }
+        return false; // 🔵 Fallback (VST3, etc.)
+    }
+
+    int getPluginFormat()
+    {   if(checkIfClapAtRuntime())        return 1;
+        return 0;
+    }
+    Window& getWindow() const override {
+        return DGL::ImGuiStandaloneWindow::getWindow();
+    }
+    void setDroppedFilePath(const char* path) override {
+        fileDropped(path);
+    }
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
         auto* vec_ptr = static_cast<PlotAudioContext*>(data_ptr);
         float y_val = vec_ptr->audioData->sampleData[vec_ptr->channel][idx].load(std::memory_order_relaxed);
@@ -102,6 +206,14 @@ public:
         if(std::abs((*vec_ptr)[idx])==0)y_val=-999.f;
         return ImPlotPoint(idx, y_val);
     }
+    static ImPlotPoint envelopeGetter(int idx, void* data_ptr) {
+        auto* vec_ptr = static_cast<std::vector<std::atomic<float>>*>(data_ptr);
+        float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
+        return ImPlotPoint(idx, y_val);
+    }
+
+
+
 
     void calculateFFT(int j){
         //std::vector<std::complex<float>> data_in ( data->length );
@@ -255,7 +367,7 @@ public:
 
     void setSpectrumAmplitude(int x, float y, int channel)
     {
-        if(x<0||x>MAX_SAMPLE_LENGTH/2) return;
+        if(x<0||x>data->length.load(std::memory_order_relaxed)/2) return;
         (*spectrum[channel])[x]=std::polar(
             (float)std::min(std::max(y,0.f),1.f),
             (float)(std::abs((*spectrum[channel])[x])?std::arg((*spectrum[channel])[x]):-M_PI/2)
@@ -273,6 +385,12 @@ public:
         isSpectrumChanged[channel]=true;
     }
 
+    void setEnvelope(int x, float y)
+    {
+        if(x<0||x>=ENVELOPE_LENGTH) return;
+        module->envelope[x].store(std::max(0.f,std::min(1.f,y)), std::memory_order_relaxed);
+        setDirty();
+    }
     void handleDrag(int x, float y, std::function<void(int, float, int)> callback, int channel=0)
     {
         if(isDragging){
@@ -290,6 +408,141 @@ public:
         dragStartX=x;
         dragStartY=y;
     }
+
+    void getEmbeddedSubwindowOffset(int& out_x, int& out_y) {
+        // 1. Extract the raw Win32 HWND handles out of DPF/DGL
+        HWND main_hwnd = (HWND)parentWindow->getNativeWindowHandle();
+        HWND sub_hwnd  = (HWND)getWindow().getNativeWindowHandle();
+
+
+        // 2. Fetch the top-left screen position of the child subwindow
+        POINT pt = { 0, 0 };
+        ClientToScreen(sub_hwnd, &pt);
+
+        // 3. Map those screen coordinates backwards relative to the main plugin window canvas
+        ScreenToClient(main_hwnd, &pt);
+
+        // 4. Output the precise relative pixel offset bounds!
+        out_x = pt.x;
+        out_y = pt.y;
+    }
+
+    void displayPlaybackControls()
+    {
+
+
+        // 3. Set the slider width to stretch up to that text boundary
+        ImGui::SetNextItemWidth(-100.f);
+        if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
+        {
+            if (ImGui::IsItemActivated())
+                editParameter(kParamSpeed, true);
+
+            setParameterValue(kParamSpeed, fSpeed);
+
+        }
+        const uint32_t activeFormat = getPluginFormat();
+        if (activeFormat == 1)
+        {
+            if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+            {
+                const clap_host_t* host=static_cast<const clap_host_t*>(dspPointer->host);
+                HWND hwnd = reinterpret_cast<HWND>(getWindow().getNativeWindowHandle());
+
+                if(host){
+                    // Query DAW for the context menu extension
+                    auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
+                    std::cout<<"menuExt"<<std::endl;
+                    if (menuExt && menuExt->popup)
+                    {
+                        std::cout<<"pop"<<std::endl;
+
+
+                        ImVec2 mousePos = ImGui::GetMousePos();
+
+                        auto* payload = new AsyncMenuPayload();
+                        payload->host = host;
+                        int xOffset,yOffset;
+                        getEmbeddedSubwindowOffset(xOffset,yOffset);
+                        payload->screenX = mousePos.x+xOffset;
+                        payload->screenY = mousePos.y+yOffset;
+
+                        ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
+                    }
+                }
+                ImGuiIO& io = ImGui::GetIO();
+                io.MouseClicked[ImGuiMouseButton_Right] = false;
+                io.MouseDown[ImGuiMouseButton_Right] = false;
+
+            }
+        }
+        if (ImGui::IsItemDeactivated())
+        {
+            editParameter(kParamSpeed, false);
+        }
+    }
+
+    void displayEnvelope(){
+        ImPlot::SetCurrentContext(imPlotContext[6]);
+        if(ImPlot::BeginPlot("Envelope",ImVec2(-1.0f, 200.0f))){
+            setInputMap(true);
+
+            ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.18, ImPlotCond_Always);
+            ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
+
+            // Allow the X-axis to scroll and zoom normally
+            ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoGridLines|ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
+            ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
+            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -10.0, 209.0);
+            ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, 219.0);
+
+
+
+            ImPlotSpec bound_spec;
+            bound_spec.LineColor = ImVec4(0.5f, 0.5f, 0.5f, 0.5f);
+            bound_spec.LineWeight = 1.5f;
+
+            // --- VERTICAL BOUNDS (From Y=0 to Y=1) ---
+            double v_line_y[] = { 0.0, 1.0 };
+            double v_line_x0[] = { 0.0, 0.0 };
+            double v_line_x200[] = { 200.0, 200.0 };
+
+            // Left vertical edge at X=0
+            ImPlot::PlotLine("##Vert0", v_line_x0, v_line_y, 2, bound_spec);
+
+            // Right vertical edge at X=200
+            ImPlot::PlotLine("##Vert200", v_line_x200, v_line_y, 2, bound_spec);
+
+
+            // --- HORIZONTAL BOUNDS (From X=0 to X=200) ---
+            double h_line_x[] = { 0.0, 200.0 };
+            double h_line_y0[] = { 0.0, 0.0 };
+            double h_line_y1[] = { 1.0, 1.0 };
+
+            // Bottom horizontal edge at Y=0
+            ImPlot::PlotLine("##Horiz0", h_line_x, h_line_y0, 2, bound_spec);
+
+            // Top horizontal edge at Y=1
+            ImPlot::PlotLine("##Horiz1", h_line_x, h_line_y1, 2, bound_spec);
+
+
+
+            ImPlot::PlotScatterG("Envelope", envelopeGetter, &dspPointer->modules[0]->envelope, ENVELOPE_LENGTH, spec);
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+
+                handleDrag(
+                    (int)current_pos.x,current_pos.y,
+                    [this](int x, float y, int dummy){this->setEnvelope(x,y);}
+                    );
+
+            }
+            ImPlot::EndPlot();
+
+        }
+    }
+
 
     void display()
     {
@@ -429,12 +682,12 @@ public:
                             channel
                             );
 
-                        int newLength=std::max(
-                            data->length.load(std::memory_order_relaxed),
-                            std::max(0,std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x*2))
-                            );
+                        // int newLength=std::max(
+                        //     data->length.load(std::memory_order_relaxed),
+                        //     std::max(0,std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x*2))
+                        //     );
 
-                        data->length.store(newLength, std::memory_order_relaxed);
+                        // data->length.store(newLength, std::memory_order_relaxed);
 
                         if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
                     }
@@ -476,30 +729,49 @@ public:
             ImGui::EndTable();
 
         }
-        if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))isDragging=false;
+        if(!ImGui::IsMouseDown(ImGuiMouseButton_Left)) isDragging=false;
     }
 
-    // void onImGuiDisplay() override{
+    void onImGuiDisplay() override{
 
-    //     ImGui::PushID(this);
+        ImGui::PushID(this);
 
-    //     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    //     ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
 
-    //     if(!data)return;
-    //     if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
-    //         display();
+        if(!data)return;
+        if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
+            if (ImGui::BeginTable("my_resizable_table", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit))
+            {
+                ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthFixed, 1225.0f);
+                ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableNextColumn();
+                display();
 
-    //     }
-    //     ImGui::End();
-    //     ImGui::PopID();
+                ImGui::TableNextColumn();
 
-    // }
+
+                displayPlaybackControls();
+                displayEnvelope();
+
+                ImGui::EndTable();
+            }
+
+
+        }
+        ImGui::End();
+        ImGui::PopID();
+
+    }
     ~SampleEditor(){
         for(int i=0;i<4;i++){
             ImPlot::DestroyContext(imPlotContext[i]);
         }
         delete spectrum[0];delete spectrum[1];
+
+        HWND hwnd = (HWND)getWindow().getNativeWindowHandle();
+        ::RemoveWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this));
+
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleEditor)
 

@@ -169,7 +169,8 @@ struct Module {
     }
 
     void run(float outputs[2]){
-        float recipLength=((float)ENVELOPE_LENGTH)/((float)std::max(1,sample->length.load(std::memory_order_relaxed)));
+        float recipLength=0.0002;
+        recipLength=((float)ENVELOPE_LENGTH)/((float)std::max(1,sample->length.load(std::memory_order_relaxed)));
 
         outputs[0]=outputs[1]=0;
         float tempOuts[2];
@@ -234,11 +235,11 @@ inline void SamplePlaybackEngineMonophonic::run(float outputs[2], float recipLen
         return;
     }
     outputs[0]=outputs[1]=module->sample->sampleData[0][(int)playhead].load(std::memory_order_relaxed)
-                              *getEnvelopeValue(recipLength)*getReleaseValue(recipLength)
+                            *getEnvelopeValue(recipLength)*getReleaseValue(recipLength)
         ;
     if(module->sample->channels.load(std::memory_order_relaxed)==2){
         outputs[1]=module->sample->sampleData[1][(int)playhead].load(std::memory_order_relaxed)
-                     *getEnvelopeValue(recipLength)*getReleaseValue(recipLength)
+                   *getEnvelopeValue(recipLength)*getReleaseValue(recipLength)
             ;
     }
     timeStep();
