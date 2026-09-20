@@ -265,7 +265,7 @@ protected:
             editor->setInputMap(editEnvelope);
 
             ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
-            ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.18, ImPlotCond_Always);
             ImPlot::SetupAxisScale(ImAxis_Y1, editor->TransformForward_Sqrt, editor->TransformInverse_Sqrt);
 
             // Allow the X-axis to scroll and zoom normally
@@ -273,35 +273,36 @@ protected:
             ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
             ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -10.0, 209.0);
             ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, 219.0);
-            // 2. Define the vertical boundaries for your lines
-            double y_start = 0; // Change to your desired bottom Y value
-            double y_end   =  1; // Change to your desired top Y value
 
 
 
-            ImU32 line_color = ImGui::ColorConvertFloat4ToU32(ImVec4(0.5f, 0.5f, 0.5f, 0.6f));
-            // 3. Draw the lines (using "##" hides them from the legend)
-            ImVec2 zero_top = ImPlot::PlotToPixels(ImPlotPoint(0.0, 1.0));
-            ImVec2 zero_bottom = ImPlot::PlotToPixels(ImPlotPoint(0.0, 0.0));
-            ImPlot::GetPlotDrawList()->AddLine(zero_top, zero_bottom, line_color, 1.5f);
+            ImPlotSpec bound_spec;
+            bound_spec.LineColor = ImVec4(0.5f, 0.5f, 0.5f, 0.5f);
+            bound_spec.LineWeight = 1.5f;
 
-            // Line at 200 (From top to bottom)
-            ImVec2 two_hundred_top = ImPlot::PlotToPixels(ImPlotPoint(200.0, 1.0));
-            ImVec2 two_hundred_bottom = ImPlot::PlotToPixels(ImPlotPoint(200.0, 0.0));
-            ImPlot::GetPlotDrawList()->AddLine(two_hundred_top, two_hundred_bottom, line_color, 1.5f);
-            // ... (Your previous PlotScatterG and vertical line code here) ...
+            // --- VERTICAL BOUNDS (From Y=0 to Y=1) ---
+            double v_line_y[] = { 0.0, 1.0 };
+            double v_line_x0[] = { 0.0, 0.0 };
+            double v_line_x200[] = { 200.0, 200.0 };
 
-            // Line at 0 (From X=0 to X=200)
-            ImVec2 zero_left  = ImPlot::PlotToPixels(ImPlotPoint(0.0, 0.0));
-            ImVec2 zero_right = ImPlot::PlotToPixels(ImPlotPoint(200.0, 0.0));
-            ImPlot::GetPlotDrawList()->AddLine(zero_left, zero_right, line_color, 1.5f);
+            // Left vertical edge at X=0
+            ImPlot::PlotLine("##Vert0", v_line_x0, v_line_y, 2, bound_spec);
 
-            // Line at 1 (From X=0 to X=200)
-            ImVec2 one_left   = ImPlot::PlotToPixels(ImPlotPoint(0.0, 1.0));
-            ImVec2 one_right  = ImPlot::PlotToPixels(ImPlotPoint(200.0, 1.0));
-            ImPlot::GetPlotDrawList()->AddLine(one_left, one_right, line_color, 1.5f);
+            // Right vertical edge at X=200
+            ImPlot::PlotLine("##Vert200", v_line_x200, v_line_y, 2, bound_spec);
 
-            // ... (Your hover interaction handling and EndPlot here) ...
+
+            // --- HORIZONTAL BOUNDS (From X=0 to X=200) ---
+            double h_line_x[] = { 0.0, 200.0 };
+            double h_line_y0[] = { 0.0, 0.0 };
+            double h_line_y1[] = { 1.0, 1.0 };
+
+            // Bottom horizontal edge at Y=0
+            ImPlot::PlotLine("##Horiz0", h_line_x, h_line_y0, 2, bound_spec);
+
+            // Top horizontal edge at Y=1
+            ImPlot::PlotLine("##Horiz1", h_line_x, h_line_y1, 2, bound_spec);
+
 
 
             ImPlot::PlotScatterG("Envelope", envelopeGetter, &getPluginDPSPointer()->modules[0]->envelope, ENVELOPE_LENGTH, editor->spec);
