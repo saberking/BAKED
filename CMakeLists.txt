@@ -13,9 +13,16 @@ if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{CMAKE_TOOLCHAIN_FILE})
     set(CMAKE_TOOLCHAIN_FILE "$ENV{CMAKE_TOOLCHAIN_FILE}" CACHE FILEPATH "Toolchain file")
 endif()
 project(${NAME})
+
+
 execute_process(
     COMMAND git apply "${CMAKE_CURRENT_SOURCE_DIR}/dpf_changes.patch"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dpf"
+    ERROR_QUIET
+)
+execute_process(
+    COMMAND git apply "${CMAKE_CURRENT_SOURCE_DIR}/dpf_widgets_changes.patch"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dpf-widgets"
     ERROR_QUIET
 )
 

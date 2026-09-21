@@ -1,0 +1,127 @@
+diff --git a/opengl/DearImGui.cpp b/opengl/DearImGui.cpp
+index 7ae2d06..09703a4 100644
+--- a/opengl/DearImGui.cpp
++++ b/opengl/DearImGui.cpp
+@@ -21,7 +21,34 @@
+ #ifndef DGL_NO_SHARED_RESOURCES
+ # include "src/Resources.hpp"
+ #endif
++#ifndef GL_GLEXT_PROTOTYPES
++# define GL_GLEXT_PROTOTYPES 1
++#endif
++
++#include <GL/gl.h>
++#include <GL/glext.h>
++#ifdef _WIN32
++#include <windows.h>
++
++typedef void (APIENTRY *PFNGLGENFRAMEBUFFERSPROC)(GLsizei n, GLuint* framebuffers);
++typedef void (APIENTRY *PFNGLBINDFRAMEBUFFERPROC)(GLenum target, GLuint framebuffer);
++typedef void (APIENTRY *PFNGLFRAMEBUFFERTEXTURE2DPROC)(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
++typedef void (APIENTRY *PFNGLBLITFRAMEBUFFERPROC)(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
++
++// Add "p_" prefix to differentiate them from the global header names
++static PFNGLGENFRAMEBUFFERSPROC    p_glGenFramebuffers    = nullptr;
++static PFNGLBINDFRAMEBUFFERPROC    p_glBindFramebuffer    = nullptr;
++static PFNGLFRAMEBUFFERTEXTURE2DPROC p_glFramebufferTexture2D = nullptr;
++static PFNGLBLITFRAMEBUFFERPROC    p_glBlitFramebuffer    = nullptr;
++#endif
+ 
++// 2. Ensure the standard FBO tokens are mapped correctly under legacy naming conventions
++#ifndef GL_FRAMEBUFFER
++# define GL_FRAMEBUFFER 0x8D40
++# define GL_COLOR_ATTACHMENT0 0x8CE0
++# define GL_READ_FRAMEBUFFER 0x8CA8
++# define GL_DRAW_FRAMEBUFFER 0x8CA9
++#endif
+ #if defined(DGL_USE_GLES2)
+ # define IMGUI_IMPL_OPENGL_ES2
+ #elif defined(DGL_USE_GLES3)
+@@ -222,6 +249,37 @@ void ImGuiWidget<BaseWidget>::onDisplay()
+     const OpenGL3GraphicsContext& gl3context
+         = static_cast<const OpenGL3GraphicsContext&>(BaseWidget::getGraphicsContext());
+     glUseProgram(0);
++#else
++
++        static GLuint template_fbo = 0;
++        static GLuint template_tex = 0;
++#ifdef _WIN32
++    // Load pointers with the new unique names
++    if (p_glGenFramebuffers == nullptr) {
++        p_glGenFramebuffers    = (PFNGLGENFRAMEBUFFERSPROC)wglGetProcAddress("glGenFramebuffers");
++        p_glBindFramebuffer    = (PFNGLBINDFRAMEBUFFERPROC)wglGetProcAddress("glBindFramebuffer");
++        p_glFramebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)wglGetProcAddress("glFramebufferTexture2D");
++        p_glBlitFramebuffer    = (PFNGLBLITFRAMEBUFFERPROC)wglGetProcAddress("glBlitFramebuffer");
++
++        if (p_glGenFramebuffers == nullptr) {
++            p_glGenFramebuffers    = (PFNGLGENFRAMEBUFFERSPROC)wglGetProcAddress("glGenFramebuffersEXT");
++            p_glBindFramebuffer    = (PFNGLBINDFRAMEBUFFERPROC)wglGetProcAddress("glBindFramebufferEXT");
++            p_glFramebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)wglGetProcAddress("glFramebufferTexture2DEXT");
++            p_glBlitFramebuffer    = (PFNGLBLITFRAMEBUFFERPROC)wglGetProcAddress("glBlitFramebufferEXT");
++        }
++    }
++#endif
++
++           // Execute the FBO routines using your custom pointers
++    if (template_fbo == 0 && p_glGenFramebuffers != nullptr) {
++        p_glGenFramebuffers(1, &template_fbo);
++        p_glBindFramebuffer(GL_FRAMEBUFFER, template_fbo);
++
++        // ... update your texture binding calls to use p_glFramebufferTexture2D ...
++    }
++
++    // Remember to update your blit pass near the end to use p_glBindFramebuffer and p_glBlitFramebuffer!
++
+    #endif
+ 
+     ImGui::SetCurrentContext(imData->context);
+@@ -251,11 +309,46 @@ void ImGuiWidget<BaseWidget>::onDisplay()
+     {
+         data->DisplayPos.x = -imData->getDisplayX();
+         data->DisplayPos.y = imData->getDisplayY();
+-       #if defined(DGL_USE_GLES2) || defined(DGL_USE_GLES3) || defined(DGL_USE_OPENGL3)
++
++        // 1. Add static tracking variables inside the render function scope
++        static GLuint template_fbo = 0;
++        static GLuint template_tex = 0;
++        int w = (int)ImGui::GetIO().DisplaySize.x;
++        int h = (int)ImGui::GetIO().DisplaySize.y;
++
++        // Initialize the FBO once if the dimensions change
++        if (template_fbo == 0) {
++            p_glGenFramebuffers(1, &template_fbo);
++            p_glBindFramebuffer(GL_FRAMEBUFFER, template_fbo);
++
++            glGenTextures(1, &template_tex);
++            glBindTexture(GL_TEXTURE_2D, template_tex);
++            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++
++            p_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, template_tex, 0);
++        }
++
++        // 2. REDIRECT THE IMGUI VERTEX PIPELINE TO THE FBO
++        p_glBindFramebuffer(GL_FRAMEBUFFER, template_fbo);
++        glViewport(0, 0, w, h);
++        glClear(GL_COLOR_BUFFER_BIT);
++#if defined(DGL_USE_GLES2) || defined(DGL_USE_GLES3) || defined(DGL_USE_OPENGL3)
++
++        // Run the default template renderer inside hardware memory!
+         ImGui_ImplOpenGL3_RenderDrawData(data);
+-       #else
++#else
+         ImGui_ImplOpenGL2_RenderDrawData(data);
+-       #endif
++#endif
++        // 3. UNBIND AND COPIED VIA AN EFFICIENT BLIT
++        // Return to the host canvas window handle provided by Pugl
++        p_glBindFramebuffer(GL_FRAMEBUFFER, 0);
++
++        // Fast hardware copy operation. Wine handles a raw blit instantly
++        // without choking or entering a synchronization deadlock!
++        p_glBindFramebuffer(GL_READ_FRAMEBUFFER, template_fbo);
++        p_glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
++        p_glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
++
+     }
+ 
+    #ifdef DGL_USE_OPENGL3
