@@ -107,6 +107,7 @@ public:
             ::SetWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this), 0);
         }
     }
+
     static LRESULT CALLBACK SubclassMenuProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
                                              UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
     {
@@ -462,8 +463,8 @@ public:
 
                         auto* payload = new AsyncMenuPayload();
                         payload->host = host;
-                        int xOffset,yOffset;
-                        getEmbeddedSubwindowOffset(xOffset,yOffset);
+                        int xOffset=0,yOffset=0;
+                        if (isVisible())getEmbeddedSubwindowOffset(xOffset,yOffset);
                         payload->screenX = mousePos.x+xOffset;
                         payload->screenY = mousePos.y+yOffset;
 
@@ -729,7 +730,7 @@ public:
             ImGui::EndTable();
 
         }
-        if(!ImGui::IsMouseDown(ImGuiMouseButton_Left)) isDragging=false;
+
     }
 
     void onImGuiDisplay() override{
@@ -759,6 +760,8 @@ public:
 
 
         }
+        if(isVisible()&&!ImGui::IsMouseDown(ImGuiMouseButton_Left)) isDragging=false;
+
         ImGui::End();
         ImGui::PopID();
 

@@ -32,9 +32,6 @@ class ImGuiPluginUI : public UI, public FileDropReceiver
     MyOleDropTarget *oleDropTarget=NULL;
     ImPlotContext* imPlotContext[8];
     bool editEnvelope=true;
-    bool isDragging=false;
-    float  dragStartY;
-    int dragStartX;
 public:
 
     ImGuiPluginUI()
@@ -44,8 +41,8 @@ public:
         //create unique id for automation clip window
 
         const double scaleFactor = getScaleFactor();
-        //setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
-        setSize(200,40);
+        setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
+        //setSize(200,40);
 
         if (isResizable())
             fResizeHandle.hide();
@@ -134,19 +131,25 @@ protected:
         {
 
 
-            if (ImGui::Button("Edit sample"))
+            if (ImGui::Button("Open Editor"))
                 {
                     editor->show();
                     editor->focus();
                 }
-                // ImGui::Separator();
-                // ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+                if(!editor->isVisible())
+                {
+                    editor->displayPlaybackControls();
+                    editor->displayEnvelope();
+                }
+
 
 
 
 
         }
-        if(!ImGui::IsMouseDown(ImGuiMouseButton_Left)) isDragging=false;
+        if(!editor->isVisible()&&!ImGui::IsMouseDown(ImGuiMouseButton_Left)) editor->isDragging=false;
 
         ImGui::End();
     }
