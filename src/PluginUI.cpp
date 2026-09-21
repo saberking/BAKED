@@ -131,7 +131,7 @@ protected:
         {
 
 
-            if (ImGui::Button("Open Editor"))
+            if (ImGui::Button("Open editor"))
                 {
                     editor->show();
                     editor->focus();
