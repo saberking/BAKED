@@ -40,9 +40,9 @@ public:
     {
         //create unique id for automation clip window
 
-        const double scaleFactor = getScaleFactor();
-        setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
-        //setSize(200,40);
+        // const double scaleFactor = getScaleFactor();
+        // setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
+        setSize(1650,980);
 
         if (isResizable())
             fResizeHandle.hide();
@@ -60,7 +60,7 @@ public:
             [this](int parameter,float value){this->setParameterValue(parameter, value);},
             getPluginDPSPointer()
             );
-        editor->show();
+        //editor->show();
     }
 
 
@@ -131,25 +131,22 @@ protected:
         {
 
 
-            if (ImGui::Button("Open editor"))
-                {
-                    editor->show();
-                    editor->focus();
-                }
-                ImGui::Separator();
-                ImGui::Spacing();
-                if(!editor->isVisible())
-                {
-                    editor->displayPlaybackControls();
-                    editor->displayEnvelope();
-                }
+            // if (ImGui::Button("Open editor"))
+            //     {
+            //         editor->show();
+            //         editor->focus();
+            //     }
+            //     ImGui::Separator();
+            //     ImGui::Spacing();
+            //     if(!editor->isVisible())
+            //     {
+            //         editor->displayPlaybackControls();
+            //         editor->displayEnvelope();
+            //     }
 
-
-
-
-
+            editor->display();
         }
-        if(!editor->isVisible()&&!ImGui::IsMouseDown(ImGuiMouseButton_Left)) editor->isDragging=false;
+        if(!ImGui::IsMouseDown(ImGuiMouseButton_Left)) editor->isDragging=false;
 
         ImGui::End();
     }

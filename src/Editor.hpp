@@ -31,7 +31,7 @@ struct AsyncMenuPayload {//for right click autmoaiton clip
 };
 
 
-class SampleEditor : public DGL::ImGuiStandaloneWindow, public FileDropReceiver
+class SampleEditor //: public DGL::ImGuiStandaloneWindow, public FileDropReceiver
 {
 public:
     AudioData *data=NULL;
@@ -64,7 +64,7 @@ public:
                  std::function<void(int, float)> _setParameterValue,
                  ImGuiPluginDSP *_dSPPointer
         )
-        :DGL::ImGuiStandaloneWindow(_window.getApp(), _window)
+        //:DGL::ImGuiStandaloneWindow(_window.getApp(), _window)
     {
         parentWindow=&_window;
         module=_module;
@@ -76,8 +76,8 @@ public:
         setParameterValue=_setParameterValue;
         dspPointer=_dSPPointer;
         spec.Flags = ImPlotFlags_CanvasOnly;
-        setResizable(true);
-        setSize(1675,1000);
+        // setResizable(true);
+        // setSize(1675,1000);
 
         for(int channel=0;channel<2;channel++)
         {
@@ -98,7 +98,7 @@ public:
         }
 
         WM_TRIGGER_CLAP_MENU = ::RegisterWindowMessageA("MyUniquePlugin_ClapContextMenu_TriggerMsg");
-        HWND hwnd = (HWND)getWindow().getNativeWindowHandle();
+        HWND hwnd = (HWND)parentWindow->getNativeWindowHandle();
         const uint32_t activeFormat = getPluginFormat();
 
         if (activeFormat == 1)
@@ -177,12 +177,12 @@ public:
     {   if(checkIfClapAtRuntime())        return 1;
         return 0;
     }
-    Window& getWindow() const override {
-        return DGL::ImGuiStandaloneWindow::getWindow();
-    }
-    void setDroppedFilePath(const char* path) override {
-        fileDropped(path);
-    }
+    // Window& getWindow() const override {
+    //     return DGL::ImGuiStandaloneWindow::getWindow();
+    // }
+    // void setDroppedFilePath(const char* path) override {
+    //     fileDropped(path);
+    // }
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
         auto* vec_ptr = static_cast<PlotAudioContext*>(data_ptr);
         float y_val = vec_ptr->audioData->sampleData[vec_ptr->channel][idx].load(std::memory_order_relaxed);
@@ -410,23 +410,23 @@ public:
         dragStartY=y;
     }
 
-    void getEmbeddedSubwindowOffset(int& out_x, int& out_y) {
-        // 1. Extract the raw Win32 HWND handles out of DPF/DGL
-        HWND main_hwnd = (HWND)parentWindow->getNativeWindowHandle();
-        HWND sub_hwnd  = (HWND)getWindow().getNativeWindowHandle();
+    // void getEmbeddedSubwindowOffset(int& out_x, int& out_y) {
+    //     // 1. Extract the raw Win32 HWND handles out of DPF/DGL
+    //     HWND main_hwnd = (HWND)parentWindow->getNativeWindowHandle();
+    //     HWND sub_hwnd  = (HWND)getWindow().getNativeWindowHandle();
 
 
-        // 2. Fetch the top-left screen position of the child subwindow
-        POINT pt = { 0, 0 };
-        ClientToScreen(sub_hwnd, &pt);
+    //     // 2. Fetch the top-left screen position of the child subwindow
+    //     POINT pt = { 0, 0 };
+    //     ClientToScreen(sub_hwnd, &pt);
 
-        // 3. Map those screen coordinates backwards relative to the main plugin window canvas
-        ScreenToClient(main_hwnd, &pt);
+    //     // 3. Map those screen coordinates backwards relative to the main plugin window canvas
+    //     ScreenToClient(main_hwnd, &pt);
 
-        // 4. Output the precise relative pixel offset bounds!
-        out_x = pt.x;
-        out_y = pt.y;
-    }
+    //     // 4. Output the precise relative pixel offset bounds!
+    //     out_x = pt.x;
+    //     out_y = pt.y;
+    // }
 
     void displayPlaybackControls()
     {
@@ -448,7 +448,7 @@ public:
             if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
             {
                 const clap_host_t* host=static_cast<const clap_host_t*>(dspPointer->host);
-                HWND hwnd = reinterpret_cast<HWND>(getWindow().getNativeWindowHandle());
+                HWND hwnd = reinterpret_cast<HWND>(parentWindow->getNativeWindowHandle());
 
                 if(host){
                     // Query DAW for the context menu extension
@@ -464,7 +464,7 @@ public:
                         auto* payload = new AsyncMenuPayload();
                         payload->host = host;
                         int xOffset=0,yOffset=0;
-                        if (isVisible())getEmbeddedSubwindowOffset(xOffset,yOffset);
+                        // if (isVisible())getEmbeddedSubwindowOffset(xOffset,yOffset);
                         payload->screenX = mousePos.x+xOffset;
                         payload->screenY = mousePos.y+yOffset;
 
@@ -545,7 +545,7 @@ public:
     }
 
 
-    void display()
+    void displaySample()
     {
         int plotIndex=0;
 
@@ -733,46 +733,51 @@ public:
 
     }
 
-    void onImGuiDisplay() override{
+    void display()
+    {
+        if (ImGui::BeginTable("my_resizable_table", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit))
+        {
+            ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthFixed, 1225.0f);
+            ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextColumn();
+            displaySample();
 
-        ImGui::PushID(this);
-
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
-
-        if(!data)return;
-        if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
-            if (ImGui::BeginTable("my_resizable_table", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit))
-            {
-                ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthFixed, 1225.0f);
-                ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableNextColumn();
-                display();
-
-                ImGui::TableNextColumn();
+            ImGui::TableNextColumn();
 
 
-                displayPlaybackControls();
-                displayEnvelope();
+            displayPlaybackControls();
+            displayEnvelope();
 
-                ImGui::EndTable();
-            }
-
-
+            ImGui::EndTable();
         }
-        if(isVisible()&&!ImGui::IsMouseDown(ImGuiMouseButton_Left)) isDragging=false;
-
-        ImGui::End();
-        ImGui::PopID();
-
     }
+
+    // void onImGuiDisplay() override{
+
+    //     ImGui::PushID(this);
+
+    //     ImGui::SetNextWindowPos(ImVec2(0, 0));
+    //     ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
+
+    //     if(!data)return;
+    //     if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
+    //         display();
+
+
+    //     }
+    //     if(isVisible()&&!ImGui::IsMouseDown(ImGuiMouseButton_Left)) isDragging=false;
+
+    //     ImGui::End();
+    //     ImGui::PopID();
+
+    // }
     ~SampleEditor(){
         for(int i=0;i<4;i++){
             ImPlot::DestroyContext(imPlotContext[i]);
         }
         delete spectrum[0];delete spectrum[1];
 
-        HWND hwnd = (HWND)getWindow().getNativeWindowHandle();
+        HWND hwnd = (HWND)parentWindow->getNativeWindowHandle();
         ::RemoveWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this));
 
     }
