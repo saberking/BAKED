@@ -439,7 +439,10 @@ public:
         if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
         {
             if (ImGui::IsItemActivated())
-                editParameter(kParamSpeed, true);
+            {
+                    editParameter(kParamSpeed, true);
+
+            }
 
             setParameterValue(kParamSpeed, fSpeed);
 

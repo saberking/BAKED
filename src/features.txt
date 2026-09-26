@@ -1,5 +1,9 @@
 Undo
+graph more sensitive
 Keep phase seperately
 load sample as partials or phase
 that special evenly spaced math phase button
 bake envelope, on off button
+
+fix vst3 crash when using speed slider
+fix typing in values

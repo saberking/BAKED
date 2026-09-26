@@ -49,15 +49,12 @@ protected:
     */
     void initParameter(uint32_t index, Parameter& parameter) override
     {
-        DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
 
         parameter.ranges.min = 0.f;
         parameter.ranges.max = 1.f;
         parameter.ranges.def = 1.f;
         parameter.name = "Speed";
-        parameter.shortName = "Speed";
         parameter.symbol = "speed";
-        parameter.unit = "";
         parameter.hints=kParameterIsAutomatable;
 
     }
