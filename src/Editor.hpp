@@ -317,7 +317,7 @@ public:
 
         isSpectrumChanged[j]=false;
         setDirty();
-
+        module->process();
     }
 
     void setInputMap(bool editing){
@@ -537,6 +537,10 @@ public:
                     (int)current_pos.x,current_pos.y,
                     [this](int x, float y, int dummy){this->setEnvelope(x,y);}
                     );
+                if (isLiveUpdate)
+                {
+                    module->process();
+                }
 
             }
             ImPlot::EndPlot();
@@ -591,7 +595,11 @@ public:
                         {
 
                             if(isSpectrumChanged[j])calculateWaveform(j);
-                            if(isWaveformChanged[j])calculateFFT(j);
+                            if(isWaveformChanged[j])
+                            {
+                                calculateFFT(j);
+                                module->process();
+                            }
                         }
                     }
                 }
@@ -607,7 +615,11 @@ public:
                 for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
                 {
                     isWaveformChanged[j]=true;
-                    if(isLiveUpdate) calculateFFT(j);
+                    if(isLiveUpdate)
+                    {
+                        calculateFFT(j);
+                        module->process();
+                    }
 
                 }
 
@@ -649,7 +661,11 @@ public:
 
                         data->length.store(newLength, std::memory_order_relaxed);
 
-                        if(isLiveUpdate&&isWaveformChanged[channel])calculateFFT(channel);
+                        if(isLiveUpdate&&isWaveformChanged[channel])
+                        {
+                            calculateFFT(channel);
+                            module->process();
+                        }
                     }
                     showPlayhead();
                     ImPlot::EndPlot();
