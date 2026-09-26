@@ -441,8 +441,8 @@ public:
             if (ImGui::IsItemActivated())
             {
                     editParameter(kParamSpeed, true);
-
             }
+            fSpeed=std::max(0.f,std::min(1.f,fSpeed));
 
             setParameterValue(kParamSpeed, fSpeed);
 
@@ -611,7 +611,7 @@ public:
 
             float tempLength=length;
             ImGui::SliderFloat ("Length",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
-            length=(int)tempLength;
+            length=std::max(1, std::min(MAX_SAMPLE_LENGTH,(int)tempLength));
             if(length!=data->length.load(std::memory_order_relaxed))
             {
                 data->length.store(length, std::memory_order_relaxed);
