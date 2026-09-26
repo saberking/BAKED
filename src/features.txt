@@ -1,0 +1,5 @@
+Undo
+Keep phase seperately
+load sample as partials or phase
+that special evenly spaced math phase button
+bake envelope, on off button

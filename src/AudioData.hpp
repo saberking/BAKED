@@ -20,7 +20,7 @@ public:
     std::atomic<int> channels = 1;
     const int maxChannels;
     std::vector<std::atomic<float>> sampleData[2];
-    std::atomic<int> length=0;
+    std::atomic<int> length=1;
     AudioData(int _maxChannels):maxChannels(_maxChannels){
         for(int i=0;i<maxChannels;i++)
         {

@@ -52,7 +52,7 @@ public:
     bool isDragging=false;
     float  dragStartY;
     int dragStartX;
-    double sharedXMax[2], sharedXMin[2];
+    double spectrumXMax, spectrumXMin, waveformXMax, waveformXMin;
     float fSpeed = 1.f;
     ImGuiPluginDSP *dspPointer;
     Window *parentWindow;
@@ -93,9 +93,11 @@ public:
         for(int channel=0;channel<2;channel++)
         {
             calculateFFT(channel);
-            sharedXMax[channel]=100;
-            sharedXMin[channel]=-2;
         }
+        spectrumXMax=100;
+        spectrumXMin=-2;
+        waveformXMax=-4;
+        waveformXMin=200;
 
         WM_TRIGGER_CLAP_MENU = ::RegisterWindowMessageA("MyUniquePlugin_ClapContextMenu_TriggerMsg");
         HWND hwnd = (HWND)parentWindow->getNativeWindowHandle();
@@ -492,7 +494,6 @@ public:
             ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.18, ImPlotCond_Always);
             ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
-            // Allow the X-axis to scroll and zoom normally
             ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoGridLines|ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
             ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
             ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -10.0, 209.0);
@@ -606,7 +607,7 @@ public:
             }
 
             float tempLength=length;
-            ImGui::SliderFloat ("Length",&tempLength, 0,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
+            ImGui::SliderFloat ("Length",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
             length=(int)tempLength;
             if(length!=data->length.load(std::memory_order_relaxed))
             {
@@ -640,9 +641,13 @@ public:
                     ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
 
-                    // Allow the X-axis to scroll and zoom normally
                     ImPlot::SetupAxis(ImAxis_X1, "Sample", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxisLinks(ImAxis_X1, &waveformXMin, &waveformXMax);
                     ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
+                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -100, MAX_SAMPLE_LENGTH+1000);
+                    ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 40, MAX_SAMPLE_LENGTH+2000);
+
+
                     PlotAudioContext plotAudioContext { data, channel };
                     ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &plotAudioContext, data->length.load(std::memory_order_relaxed), spec);
                     if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
@@ -684,9 +689,12 @@ public:
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
                     ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
-                    // Allow the X-axis to scroll and zoom normally
                     ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
-                    ImPlot::SetupAxisLinks(ImAxis_X1, &(sharedXMin[channel]), &(sharedXMax[channel]));
+                    ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
+
+                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
+                    ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
+
                     ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
                     if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
                         if(isWaveformChanged[channel])calculateFFT(channel);
@@ -722,9 +730,11 @@ public:
                     ImPlot::SetupAxis(ImAxis_Y1, "Phase", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
 
-                    // Allow the X-axis to scroll and zoom normally
                     ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
-                    ImPlot::SetupAxisLinks(ImAxis_X1, &(sharedXMin[channel]), &(sharedXMax[channel]));
+                    ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
+                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
+                    ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
+
                     ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
                     if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
                         if(isWaveformChanged[channel])calculateFFT(channel);
