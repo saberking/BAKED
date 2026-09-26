@@ -90,18 +90,17 @@ protected:
     String getState(const char* key) const override {
         if (!strcmp(key,"sampleData"))
         {
-            uint32_t length = static_cast<uint32_t>(modules[0]->sample->length.load(std::memory_order_relaxed));
-            if (length == 0) return String("");
 
             // 1. Pack your sizes and channels sequentially into a simple local raw byte array
             size_t headerSize = sizeof(uint32_t);
             size_t channelsSize=sizeof(uint32_t);
             size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
-            size_t totalBytes = headerSize + (channelDataSize * 2)+channelsSize;
+            size_t envelopeSize=ENVELOPE_LENGTH*sizeof(float);
+            size_t totalBytes = headerSize + (channelDataSize * 2)+channelsSize +envelopeSize;
 
             std::vector<uint8_t> rawBinaryBuffer(totalBytes);
+            uint32_t length = static_cast<uint32_t>(modules[0]->sample->length.load(std::memory_order_relaxed));
 
-            // Copy length header
             std::memcpy(rawBinaryBuffer.data(), &length, headerSize);
 
             float* leftDest = reinterpret_cast<float*>(rawBinaryBuffer.data() + headerSize);
@@ -116,6 +115,11 @@ protected:
 
             uint32_t channels = static_cast<uint32_t>(modules[0]->sample->channels.load(std::memory_order_relaxed));
             std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2, &channels, channelsSize);
+
+            float *envelopeDest=reinterpret_cast<float*>(rawBinaryBuffer.data()+headerSize+channelDataSize*2+channelsSize);
+            for (uint32_t i = 0; i < ENVELOPE_LENGTH; ++i) {
+                envelopeDest[i] = modules[0]->envelope[i].load(std::memory_order_relaxed);
+            }
 
             // 3. Convert to base64 text string safely
             std::string encodedText = base64_encode(rawBinaryBuffer.data(), rawBinaryBuffer.size());
@@ -145,6 +149,7 @@ protected:
             // 4. Extract data directly out of the remaining decoded data stream
             size_t headerSize = sizeof(uint32_t);
             size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
+            size_t channelsSize=sizeof(uint32_t);
 
 
             // Create temporary pointers pointing to the raw decoded byte stream
@@ -162,7 +167,12 @@ protected:
             uint32_t channels;
             std::memcpy(&channels, rawData + headerSize + channelDataSize*2, sizeof(uint32_t));
             modules[0]->sample->channels.store(channels, std::memory_order_relaxed);
-           // updateStateValue("loadedTrigger","");
+
+            const float *envelopeSrc=reinterpret_cast<const float*>(rawData+headerSize+channelDataSize*2+channelsSize);
+            for (uint32_t i = 0; i < ENVELOPE_LENGTH; ++i) {
+                modules[0]->envelope[i].store(envelopeSrc[i], std::memory_order_relaxed);
+
+            }
         }
     }
 
