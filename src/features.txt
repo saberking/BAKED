@@ -5,10 +5,8 @@ load sample as partials or phase
 that special evenly spaced math phase button
 bake envelope, on off button
 
-FL:no keyboard in clap mode
+no keyboard in clap mode
 
-Reaper: no keyboard at all
-speed slide is laggy in clap
-speed slider freezes UI in vst3
-vst3 opens all wierd with extra windows
+
+
 
