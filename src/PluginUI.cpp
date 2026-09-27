@@ -22,6 +22,8 @@
 
 START_NAMESPACE_DISTRHO
 
+
+
 //for right click autmoaiton clip
 
 class ImGuiPluginUI : public UI, public FileDropReceiver
@@ -62,8 +64,6 @@ public:
             );
         //editor->show();
     }
-
-
 
     void stateChanged(const char* key, const char* value){
 
@@ -120,8 +120,10 @@ protected:
     void onImGuiDisplay() override {
 
 
-        const float width = getWidth();
+
         const float height = getHeight();
+        const float width = getWidth();
+
         //const float margin = 20.0f * getScaleFactor();
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));
