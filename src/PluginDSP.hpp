@@ -170,6 +170,7 @@ protected:
                 modules[0]->envelope[i].store(envelopeSrc[i], std::memory_order_relaxed);
 
             }
+            modules[0]->process();
         }
     }
 

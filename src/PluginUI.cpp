@@ -81,7 +81,7 @@ public:
         for(int i =0;i<2;i++)
         {
             editor->calculateFFT(i);
-
+            getPluginDPSPointer()->modules[0]->process();
         }
         setDirty();
     }
