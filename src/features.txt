@@ -1,8 +1,16 @@
-Undo
-graph more sensitive to zoom
+Undo, straight line, pencil
+
 load sample as partials or phase
+
 that special evenly spaced math phase button
+
+iterative phase for new partials option
+
+------------------------------------------------
+graph more sensitive to zoom
+
 bake envelope, on off button
 
+align plots by switchig from tsable to subplots
 
-
+fix reaper initial size
