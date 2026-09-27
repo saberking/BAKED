@@ -641,10 +641,10 @@ public:
                 if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L")){
                     setInputMap(editMode);
 
-                    ImPlot::SetupAxis(ImAxis_Y1, "amplitude", ImPlotAxisFlags_Lock);
+                    ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
 
-                    ImPlot::SetupAxis(ImAxis_X1, "sample", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxis(ImAxis_X1, "Sample", ImPlotAxisFlags_None);
                     ImPlot::SetupAxisLinks(ImAxis_X1, &waveformXMin, &waveformXMax);
                     ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                     ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -100, MAX_SAMPLE_LENGTH+1000);
@@ -688,11 +688,11 @@ public:
 
                 if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L")){
                     setInputMap(editMode);
-                    ImPlot::SetupAxis(ImAxis_Y1, "amplitude", ImPlotAxisFlags_Lock);
+                    ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
                     ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
-                    ImPlot::SetupAxis(ImAxis_X1, "partial", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
                     ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
 
                     ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
@@ -730,10 +730,10 @@ public:
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
                 if (ImPlot::BeginPlot(channel?"Phase R":"Phase L")){
                     setInputMap(editMode);
-                    ImPlot::SetupAxis(ImAxis_Y1, "phase", ImPlotAxisFlags_Lock);
+                    ImPlot::SetupAxis(ImAxis_Y1, "Phase", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
 
-                    ImPlot::SetupAxis(ImAxis_X1, "partial", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
                     ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
                     ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
                     ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
