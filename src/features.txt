@@ -1,10 +1,12 @@
-Undo, straight line, pencil
+Undo
 
 load sample as partials or phase
 
 that special evenly spaced math phase button
 
 iterative phase for new partials option
+
+compress, smooth, filter, fade in, fade out
 
 ------------------------------------------------
 graph more sensitive to zoom

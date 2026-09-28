@@ -504,6 +504,30 @@ public:
     //     out_x = pt.x;
     //     out_y = pt.y;
     // }
+
+    void compress()
+    {
+        for (int j=0;j<2;j++)
+        {
+            for (int i=0;i<module->sample->length.load(std::memory_order_relaxed);i++)
+            {
+                float sample=module->sample->sampleData[j][i].load(std::memory_order_relaxed);
+                module->sample->sampleData[j][i].store(std::copysign(std::sqrt(std::abs(sample)),sample));
+            }
+            isWaveformChanged[j]=true;
+        }
+
+        if(isLiveUpdate)
+        {
+            module->process();
+            for(int j=0;j<2;j++)
+            {
+                calculateFFT(j);
+
+            }
+        }
+
+    }
     void displayToolbar()
     {
         ImGui::PushFont(iconFont);
@@ -651,6 +675,14 @@ public:
             }
             ImPlot::EndPlot();
 
+        }
+    }
+
+    void displayProcessing()
+    {
+        if(ImGui::Button("Compress"))
+        {
+            compress();
         }
     }
 
@@ -875,6 +907,7 @@ public:
 
             displayPlaybackControls();
             displayEnvelope();
+            displayProcessing();
 
             ImGui::EndTable();
         }
