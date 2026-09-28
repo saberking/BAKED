@@ -1,19 +1,31 @@
 convolver length
+convolve only partials or only phase or both
 midinote&velocity
+interpolation
+----------
 load sample as partials or phase
+load sample as convolver
+load sample into "mixer"
+
 -----------
 pitcher (partial multiply)
 stretcher (waveform resample)
 harmonise/noisify (copmress/expand partials)
 partial shift
+----------
+---------
+export sample
+eraser
+dice tool
+bake envelope, on off button
 
 ------------------------------------------------
 Undo
-eraser
-dice tool
-interpolation
+--------------------------------------------
+--------------------------------------------
 
 graph more sensitive to zoom
+
 that special evenly spaced math phase tool
 
 plotG is slow maybe if it not in order
@@ -21,8 +33,6 @@ plotG is slow maybe if it not in order
 
 reverb
 -----------------------------------------
-export sample
-bake envelope, on off button
 
 align plots by switchig from tsable to subplots
 
