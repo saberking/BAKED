@@ -27,12 +27,15 @@ pitcher (partial multiply)
 stretcher (waveform resample)
 harmonise/noisify (copmress/expand partials)
 partial shift
-cossfade tool
 save preset
+-------------------------------------
+
+cossfade tool
+
 trim sample to length button
 when saving, trim zeros
 -------------------------------------
-------------------------------------
+
 graph more sensitive to zoom
 xaxis squared scale
 that special evenly spaced math phase tool
