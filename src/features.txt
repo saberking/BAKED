@@ -5,14 +5,18 @@ playback start pos
 interpolation
 
 ---------
-eraser
 dice tool
-bake envelope, on off button
+
 self convolve
 copy channel L->R or R->L
 stereo selector: LL, RR, LR, RL
 normalise button
-width button
+
+---------
+eraser
+bake envelope, on off button
+
+stereo bleed button
 
 ----------------------
 export sample
@@ -23,13 +27,15 @@ load sample as convolver
 load sample into "mixer"
 
 -----------
+
+save preset
+-----------------------------------
+-------------------------------------
 pitcher (partial multiply)
 stretcher (waveform resample)
 harmonise/noisify (copmress/expand partials)
 partial shift
-save preset
--------------------------------------
-
+-----------------
 cossfade tool
 
 trim sample to length button
