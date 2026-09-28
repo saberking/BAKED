@@ -2,4 +2,5 @@
 #define DEFINES_HPP
 #define MAX_FILE_PATH_LENGTH 256
 
+
 #endif // DEFINES_HPP

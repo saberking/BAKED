@@ -9,6 +9,9 @@ iterative phase for new partials option
 ------------------------------------------------
 graph more sensitive to zoom
 
+
+
+-----------------------------------------
 bake envelope, on off button
 
 align plots by switchig from tsable to subplots

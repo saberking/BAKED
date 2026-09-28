@@ -14,10 +14,14 @@
 #include <windows.h>
 #include <commctrl.h> // For SetWindowSubclass API
 #include "PluginDSP.hpp"
+#include "fonts/font_data.h"
 
 
 START_NAMESPACE_DISTRHO
-
+#define HAND_ICON   "\x3a"
+#define LINE_ICON   "\x3b"
+#define PENCIL_ICON "\x3c"
+#define UNDO_ICON   "\x3d"
 struct PlotAudioContext {
     AudioData* audioData;
     int channel;
@@ -37,7 +41,6 @@ public:
     AudioData *data=NULL;
     Module *module=NULL;
     ImPlotSpec spec;
-    bool editMode=false;
     bool isMono;
     ImPlotContext** imPlotContext;
     std::vector<std::complex<float>> *spectrum[2] ;
@@ -50,12 +53,17 @@ public:
     std::function<void(int, float)> setParameterValue;
     int length;
     bool isDragging=false;
-    float  dragStartY;
-    int dragStartX;
+    float  dragStartY, dragEndY;
+    int dragStartX, dragEndX;
+    std::function<void(int,float,int)> dragCallback;
+    int dragChannel;
     double spectrumXMax, spectrumXMin, waveformXMax, waveformXMin;
     float fSpeed = 1.f;
     ImGuiPluginDSP *dspPointer;
     Window *parentWindow;
+    int selectedButtonIndex=0;
+
+    ImFont *iconFont;
 
     SampleEditor(const char *_name, Module *_module, Window& _window,
                  std::function<void(const char*)> _fileDropped, std::function<void()> _setDirty,
@@ -108,6 +116,26 @@ public:
             std::cout<<"setwindowsublcass\n";
             ::SetWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this), 0);
         }
+
+        ImGuiIO& io = ImGui::GetIO();
+
+        // 1. Load default font first (Assigns to slot 0)
+        io.Fonts->AddFontDefault();
+
+        // 2. Load your custom font INDEPENDENTLY (Do NOT set config.MergeMode = true)
+        ImFontConfig config;
+        config.PixelSnapH = true;
+        config.FontDataOwnedByAtlas = false; // Prevents global array memory freeing crash
+
+        // Save the returned pointer to a global or class variable (e.g., ImFont* m_IconFont)
+        iconFont = io.Fonts->AddFontFromMemoryTTF(
+            (void*)Untitled1_ttf,
+            sizeof(Untitled1_ttf),
+            20.0f,
+            &config
+            );
+
+        io.Fonts->Build();
     }
 
     static LRESULT CALLBACK SubclassMenuProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
@@ -185,6 +213,8 @@ public:
     // void setDroppedFilePath(const char* path) override {
     //     fileDropped(path);
     // }
+
+
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
         auto* vec_ptr = static_cast<PlotAudioContext*>(data_ptr);
         float y_val = vec_ptr->audioData->sampleData[vec_ptr->channel][idx].load(std::memory_order_relaxed);
@@ -394,22 +424,67 @@ public:
         module->envelope[x].store(std::max(0.f,std::min(1.f,y)), std::memory_order_relaxed);
         setDirty();
     }
-    void handleDrag(int x, float y, std::function<void(int, float, int)> callback, int channel=0)
+    void startDrag(int x, float y, std::function<void(int, float, int)> callback, int channel)
     {
-        if(isDragging){
-            int xStep = x>dragStartX?1:-1;
-            int noOfSteps=std::abs(x-dragStartX)+1;
-            float yStep =(y-dragStartY)/noOfSteps;
-            for(int index=0;index<noOfSteps;index++)
-            {
-                callback(dragStartX+index*xStep, dragStartY+index*yStep, channel);
-            }
-        }else{
-            callback(x, y, channel);
-        }
         isDragging=true;
         dragStartX=x;
         dragStartY=y;
+        dragCallback=callback;
+        dragChannel=channel;
+    }
+    void endDrag()
+    {
+        if(isDragging)
+        {
+            drawLine(dragEndX,dragEndY);
+            isDragging=false;
+            if(isLiveUpdate)
+            {
+                for(int i=0;i<2;i++)
+                {
+                    if(isSpectrumChanged[i])
+                    {
+                        calculateWaveform(i);
+                    }
+                    if(isWaveformChanged[i])
+                    {
+                        calculateFFT(i);
+                    }
+
+                }
+                module->process();
+            }
+        }
+    }
+    void drawLine(int x, float y)
+    {
+        int xStep = x>dragStartX?1:-1;
+        int noOfSteps=std::abs(x-dragStartX)+1;
+        float yStep =(y-dragStartY)/noOfSteps;
+        for(int index=0;index<noOfSteps;index++)
+        {
+            dragCallback(dragStartX+index*xStep, dragStartY+index*yStep, dragChannel);
+        }
+    }
+    void updateDragEnd(int x, float y)
+    {
+        dragEndX=x;dragEndY=y;
+    }
+    void handleDrag(int x, float y, std::function<void(int, float, int)> callback, int channel=0)
+    {
+        if(selectedButtonIndex==1)
+        {
+            if(isDragging){
+                drawLine(x,y);
+            }else{
+                callback(x, y, channel);
+            }
+            startDrag(x,y, callback, channel);
+        }else{
+            if(!isDragging)
+                startDrag(x,y, callback, channel);
+        }
+        updateDragEnd(x,y);
     }
 
     // void getEmbeddedSubwindowOffset(int& out_x, int& out_y) {
@@ -429,7 +504,34 @@ public:
     //     out_x = pt.x;
     //     out_y = pt.y;
     // }
+    void displayToolbar()
+    {
+        ImGui::PushFont(iconFont);
+        //const char* labels[] = { "hand.svg", "pencil.svg", "lineTool.svg" };
+        const char* labels[] = { HAND_ICON, PENCIL_ICON, LINE_ICON };
 
+        for (int i = 0; i < 3; i++) {
+            bool is_selected = (selectedButtonIndex == i);
+
+            if (is_selected) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+            }
+
+            if (ImGui::Button(labels[i])) {
+                selectedButtonIndex = i; // Update selection state on click
+            }
+
+            if (is_selected) {
+                ImGui::PopStyleColor(2);
+            }
+
+            if (i < 2) {
+                ImGui::SameLine();
+            }
+        }
+        ImGui::PopFont();
+    }
     void displayPlaybackControls()
     {
 
@@ -565,66 +667,62 @@ public:
             else data->channels.store(2, std::memory_order_relaxed);
         }
         ImGui::SameLine();
-        ImGui::Checkbox("Edit", &editMode);
+        displayToolbar();
 
-        if(editMode)
+        ImGui::SameLine();
+        if(ImGui::Checkbox("Live update", &isLiveUpdate))
         {
-            ImGui::SameLine();
-            if(ImGui::Checkbox("Live update", &isLiveUpdate))
+            if(isLiveUpdate)
             {
-                if(isLiveUpdate)
+                for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
+                {
+
+                    if(isSpectrumChanged[j])calculateWaveform(j);
+                    if(isWaveformChanged[j])calculateFFT(j);
+                }
+            }
+        }
+        if(!isLiveUpdate)
+        {
+            bool showUpdateButton=false;
+            for(int j=0;j<data->channels.load(std::memory_order_relaxed);j++)
+            {
+                showUpdateButton=showUpdateButton||isSpectrumChanged[j]||isWaveformChanged[j];
+            }
+
+            if(showUpdateButton)
+            {
+                ImGui::SameLine();
+                if(ImGui::Button("Apply changes"))
                 {
                     for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
                     {
 
                         if(isSpectrumChanged[j])calculateWaveform(j);
-                        if(isWaveformChanged[j])calculateFFT(j);
-                    }
-                }
-            }
-            if(!isLiveUpdate)
-            {
-                bool showUpdateButton=false;
-                for(int j=0;j<data->channels.load(std::memory_order_relaxed);j++)
-                {
-                    showUpdateButton=showUpdateButton||isSpectrumChanged[j]||isWaveformChanged[j];
-                }
-
-                if(showUpdateButton)
-                {
-                    ImGui::SameLine();
-                    if(ImGui::Button("Apply changes"))
-                    {
-                        for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
+                        if(isWaveformChanged[j])
                         {
-
-                            if(isSpectrumChanged[j])calculateWaveform(j);
-                            if(isWaveformChanged[j])
-                            {
-                                calculateFFT(j);
-                                module->process();
-                            }
+                            calculateFFT(j);
+                            module->process();
                         }
                     }
                 }
             }
+        }
 
-            float tempLength=length;
-            ImGui::SliderFloat ("Length",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
-            length=std::max(1, std::min(MAX_SAMPLE_LENGTH,(int)tempLength));
-            if(length!=data->length.load(std::memory_order_relaxed))
+        float tempLength=length;
+        ImGui::SliderFloat ("Length",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
+        length=std::max(1, std::min(MAX_SAMPLE_LENGTH,(int)tempLength));
+        if(length!=data->length.load(std::memory_order_relaxed))
+        {
+            data->length.store(length, std::memory_order_relaxed);
+            setDirty();
+            for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
             {
-                data->length.store(length, std::memory_order_relaxed);
-                setDirty();
-                for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
+                isWaveformChanged[j]=true;
+                if(isLiveUpdate)
                 {
-                    isWaveformChanged[j]=true;
-                    if(isLiveUpdate)
-                    {
-                        calculateFFT(j);
-                        module->process();
-                    }
-
+                    calculateFFT(j);
+                    module->process();
                 }
 
             }
@@ -632,19 +730,20 @@ public:
         }
 
 
+        ImVec2 plotSize(-1,270);
         if (ImGui::BeginTable("My2ColumnTable", isMono?1:2))
         {
             for(int channel=0;channel<1||!isMono&&channel<2;channel++){
                 ImGui::TableNextColumn();
 
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
-                if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L")){
-                    setInputMap(editMode);
+                if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L", plotSize)){
+                    setInputMap(selectedButtonIndex);
 
                     ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
 
-                    ImPlot::SetupAxis(ImAxis_X1, "Sample", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
                     ImPlot::SetupAxisLinks(ImAxis_X1, &waveformXMin, &waveformXMax);
                     ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
                     ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -100, MAX_SAMPLE_LENGTH+1000);
@@ -653,7 +752,7 @@ public:
 
                     PlotAudioContext plotAudioContext { data, channel };
                     ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &plotAudioContext, data->length.load(std::memory_order_relaxed), spec);
-                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&selectedButtonIndex) {
                         if(isSpectrumChanged[channel])calculateWaveform(channel);
                         ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
@@ -686,20 +785,20 @@ public:
 
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
 
-                if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L")){
-                    setInputMap(editMode);
+                if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L",plotSize)){
+                    setInputMap(selectedButtonIndex);
                     ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
                     ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
-                    ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
                     ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
 
                     ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
                     ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
 
                     ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
-                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&selectedButtonIndex) {
                         if(isWaveformChanged[channel])calculateFFT(channel);
                         ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
                         //(*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
@@ -728,18 +827,18 @@ public:
                 ImGui::TableNextColumn();
 
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
-                if (ImPlot::BeginPlot(channel?"Phase R":"Phase L")){
-                    setInputMap(editMode);
+                if (ImPlot::BeginPlot(channel?"Phase R":"Phase L", plotSize)){
+                    setInputMap(selectedButtonIndex);
                     ImPlot::SetupAxis(ImAxis_Y1, "Phase", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
 
-                    ImPlot::SetupAxis(ImAxis_X1, "Partial", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
                     ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
                     ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
                     ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
 
                     ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
-                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&editMode) {
+                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&selectedButtonIndex) {
                         if(isWaveformChanged[channel])calculateFFT(channel);
 
                         ImPlotPoint current_pos = ImPlot::GetPlotMousePos();

@@ -44,7 +44,7 @@ public:
 
         // const double scaleFactor = getScaleFactor();
         // setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
-        setSize(1650,980);
+        setSize(1650,900);
 
         if (isResizable())
             fResizeHandle.hide();
@@ -62,7 +62,8 @@ public:
             [this](int parameter,float value){this->setParameterValue(parameter, value);},
             getPluginDPSPointer()
             );
-        //editor->show();
+
+
     }
 
     void stateChanged(const char* key, const char* value){
@@ -148,7 +149,7 @@ protected:
 
             editor->display();
         }
-        if(!ImGui::IsMouseDown(ImGuiMouseButton_Left)) editor->isDragging=false;
+        if(!ImGui::IsMouseDown(ImGuiMouseButton_Left)) editor->endDrag();
 
         ImGui::End();
     }
