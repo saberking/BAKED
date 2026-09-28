@@ -271,7 +271,7 @@ inline void SamplePlaybackEngineMonophonic::run(float outputs[2], float recipLen
     outputs[0]=outputs[1]=module->processed->sampleData[0][(int)playhead].load(std::memory_order_relaxed)
                             *getReleaseValue(recipLength)
         ;
-    if(module->processed->channels.load(std::memory_order_relaxed)==2){
+    if(module->sample->channels.load(std::memory_order_relaxed)==2){
         outputs[1]=module->processed->sampleData[1][(int)playhead].load(std::memory_order_relaxed)
                    *getReleaseValue(recipLength)
             ;
