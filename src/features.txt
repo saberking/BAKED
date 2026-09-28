@@ -6,7 +6,7 @@ load sample as partials or phase
 convolver
 
 dice tool
-
+harmonise/noisify (scale partials)
 ------------------------------------------------
 Undo
 
@@ -16,8 +16,9 @@ that special evenly spaced math phase tool
 plotG is slow maybe if it not in order
 
 
-
+reverb
 -----------------------------------------
+export sample
 bake envelope, on off button
 
 align plots by switchig from tsable to subplots

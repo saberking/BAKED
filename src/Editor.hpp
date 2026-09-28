@@ -44,6 +44,9 @@ public:
     bool isMono;
     ImPlotContext** imPlotContext;
     std::vector<std::complex<float>> *spectrum[2] ;
+    std::vector<float> *convolver;
+
+    std::vector<std::complex<float>> *convolverSpectrum ;
     bool isSpectrumChanged[2];
     bool isLiveUpdate=true;
     bool isWaveformChanged[2];
@@ -62,7 +65,6 @@ public:
     ImGuiPluginDSP *dspPointer;
     Window *parentWindow;
     int selectedButtonIndex=0;
-    std::vector<float> convolver;
 
     ImFont *iconFont;
 
@@ -87,9 +89,11 @@ public:
         spec.Flags = ImPlotFlags_CanvasOnly;
         // setResizable(true);
         // setSize(1675,1000);
-        for(int i=0;i<ENVELOPE_LENGTH;i++)
+
+        convolver=new std::vector<float>(MAX_SAMPLE_LENGTH);
+        for(int i=0;i<MAX_SAMPLE_LENGTH;i++)
         {
-            convolver.push_back(1.f);
+            (*convolver)[i]=0.f;
         }
 
         for(int channel=0;channel<2;channel++)
@@ -101,6 +105,12 @@ public:
             }
 
         }
+        convolverSpectrum=new std::vector<std::complex<float>> (MAX_SAMPLE_LENGTH/2+1);
+        for(int j=0;j<MAX_SAMPLE_LENGTH/2+1;j++)
+        {
+            (*convolverSpectrum)[j]=std::complex(0,0);
+        }
+
         isMono=(data->channels.load()==1);
         isSpectrumChanged[0]=isSpectrumChanged[1]=false;
         for(int channel=0;channel<2;channel++)
@@ -253,12 +263,10 @@ public:
 
 
 
-    void calculateFFT(int j){
-        //std::vector<std::complex<float>> data_in ( data->length );
+    void calculateFFT(int j){//j=2 for convolver
         pocketfft::shape_t shape_in{1};                                              // dimensions of the input shape
         pocketfft::stride_t stride_in{1};                    // must have the size of each element. Must have size() equal to shape_in.size()
         pocketfft::stride_t stride_out{1}; // must have the size of each element. Must have size() equal to shape_in.size()
-        //stride_in[0]=stride_out[0]=sizeof ( std::complex<float> );
         stride_in[0]=sizeof ( float );
         stride_out[0]=sizeof ( std::complex<float> );
         bool forward{ pocketfft::FORWARD };                                            // FORWARD or BACKWARD
@@ -272,8 +280,11 @@ public:
 
         for (int i=0; i<shape_in[0]; i++ )
         {
-            //data_in[i]=std::complex<float> ( data->sampleData[j][i].load(std::memory_order_relaxed),0.f );
-            data_in[i]=data->sampleData[j][i].load(std::memory_order_relaxed);
+            if(j<2){
+                data_in[i]=data->sampleData[j][i].load(std::memory_order_relaxed);
+            }else{
+                data_in[i]=(*convolver)[i];
+            }
         }
 
         pocketfft::r2c (
@@ -283,19 +294,26 @@ public:
             axes,
             forward,
             data_in.data(),
-            spectrum[j]->data(),
+            j<2?spectrum[j]->data():convolverSpectrum->data(),
             fct
             );
-        for(int i=0;i<shape_in[0]/2+1;i++)
-        {
-            if(std::abs((*spectrum[j])[i])<0.000001)
+
+        if(j<2){
+            for(int i=0;i<shape_in[0]/2+1;i++)
             {
-                (*spectrum[j])[i]=std::complex(0.f,0.f);
+                if(std::abs((*spectrum[j])[i])<0.000001)
+                {
+                    (*spectrum[j])[i]=std::complex(0.f,0.f);
+                }
             }
+            (*spectrum[j])[0]/=2;
+            (*spectrum[j])[shape_in[0]/2]/=2;
+            isWaveformChanged[j]=false;
+        }else{
+            (*convolverSpectrum)[0]/=2;
+            (*convolverSpectrum)[shape_in[0]/2]/=2;
         }
-        (*spectrum[j])[0]/=2;
-        (*spectrum[j])[shape_in[0]/2]/=2;
-        isWaveformChanged[j]=false;
+
 
     }
 
@@ -432,7 +450,7 @@ public:
     void setConvolver(int x, float y)
     {
         if(x<0||x>=ENVELOPE_LENGTH) return;
-        convolver[x]=std::max(0.f,std::min(1.f,y));
+        (*convolver)[x]=std::max(0.f,std::min(1.f,y));
     }
     void startDrag(int x, float y, std::function<void(int, float, int)> callback, int channel)
     {
@@ -561,7 +579,35 @@ public:
     }
     void convolve ()
     {
-        //
+        for(int j=0;j<2;j++)
+        {
+            if(isSpectrumChanged[j]){
+                calculateWaveform(j);
+            }
+        }
+        int sampleLength=module->sample->length.load(std::memory_order_relaxed);
+        int totalLength=std::min(MAX_SAMPLE_LENGTH,sampleLength+ENVELOPE_LENGTH-1);
+        module->sample->length.store(totalLength,std::memory_order_relaxed);
+        calculateFFT(2);//convolver
+
+        for(int j=0;j<2;j++)
+        {
+            for(int i=sampleLength;i<totalLength;i++)
+            {
+                module->sample->sampleData[j][i].store(0.f,std::memory_order_relaxed);
+
+            }
+            calculateFFT(j);
+            for(int i=0;i<totalLength/2+1;i++){
+                (*spectrum[j])[i]*=(*convolverSpectrum)[i]*(float)totalLength/(float)2;
+            }
+            calculateWaveform(j);
+
+
+        }
+
+
+
     }
     void displayToolbar()
     {
@@ -726,7 +772,7 @@ public:
             {
                 xValues.push_back(i);
             }
-            ImPlot::PlotScatter("Convolver", xValues.data(), convolver.data(), ENVELOPE_LENGTH, spec);
+            ImPlot::PlotScatter("Convolver", xValues.data(), (*convolver).data(), ENVELOPE_LENGTH, spec);
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
@@ -1011,7 +1057,8 @@ public:
             ImPlot::DestroyContext(imPlotContext[i]);
         }
         delete spectrum[0];delete spectrum[1];
-
+        delete convolverSpectrum;
+        delete convolver;
         HWND hwnd = (HWND)parentWindow->getNativeWindowHandle();
         ::RemoveWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this));
 
