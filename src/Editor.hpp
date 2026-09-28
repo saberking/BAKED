@@ -763,33 +763,37 @@ public:
 
     void displayConvolver()
     {
+        if (ImGui::BeginChild("Convolver", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY)) {
 
-        ImPlot::SetCurrentContext(imPlotContext[6]);
-        if(ImPlot::BeginPlot("Convolver",ImVec2(-1.0f, 200.0f))){
-            configureSmallGraph();
-            std::vector<float> xValues;
-            for(int i=0;i<ENVELOPE_LENGTH;i++)
+            ImPlot::SetCurrentContext(imPlotContext[6]);
+            if(ImPlot::BeginPlot("Convolver",ImVec2(-1.0f, 200.0f))){
+                configureSmallGraph();
+                std::vector<float> xValues;
+                for(int i=0;i<ENVELOPE_LENGTH;i++)
+                {
+                    xValues.push_back(i);
+                }
+                ImPlot::PlotScatter("Convolver", xValues.data(), (*convolver).data(), ENVELOPE_LENGTH, spec);
+                if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                    ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+
+                    handleDrag(
+                        (int)current_pos.x,current_pos.y,
+                        [this](int x, float y, int dummy){this->setConvolver(x,y);}
+                        );
+
+
+                }
+                ImPlot::EndPlot();
+
+            }
+            if(ImGui::Button("Convolve"))
             {
-                xValues.push_back(i);
+                convolve();
             }
-            ImPlot::PlotScatter("Convolver", xValues.data(), (*convolver).data(), ENVELOPE_LENGTH, spec);
-            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-
-                handleDrag(
-                    (int)current_pos.x,current_pos.y,
-                    [this](int x, float y, int dummy){this->setConvolver(x,y);}
-                    );
-
-
-            }
-            ImPlot::EndPlot();
 
         }
-        if(ImGui::Button("Convolve"))
-        {
-            convolve();
-        }
+        ImGui::EndChild();
 
     }
 
