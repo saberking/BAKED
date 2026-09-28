@@ -512,7 +512,8 @@ public:
             for (int i=0;i<module->sample->length.load(std::memory_order_relaxed);i++)
             {
                 float sample=module->sample->sampleData[j][i].load(std::memory_order_relaxed);
-                module->sample->sampleData[j][i].store(std::copysign(std::sqrt(std::abs(sample)),sample));
+                float cuberoot=std::cbrt(sample);
+                module->sample->sampleData[j][i].store(0.9*sample+0.1*std::copysign(cuberoot*cuberoot,sample));
             }
             isWaveformChanged[j]=true;
         }
@@ -527,6 +528,26 @@ public:
             }
         }
 
+    }
+    void filter()
+    {
+        for (int j=0;j<2;j++)
+        {
+            if (isWaveformChanged[j]) calculateFFT(j);
+            int length=module->sample->length.load(std::memory_order_relaxed)/2+1;
+            float multiplier=std::powf(0.000001,4/3*length);
+            float exponential=1.f;
+            for (int i=length/4;i<length;i++)
+            {
+                exponential*=multiplier;
+                (*spectrum[j])[i]=(*spectrum[j])[i]*exponential;
+            }
+            isSpectrumChanged[j]=true;
+            if(isLiveUpdate)
+            {
+                calculateWaveform(j);
+            }
+        }
     }
     void displayToolbar()
     {
@@ -683,6 +704,10 @@ public:
         if(ImGui::Button("Compress"))
         {
             compress();
+        }
+        if(ImGui::Button("Filter"))
+        {
+            filter();
         }
     }
 
