@@ -1,8 +1,23 @@
 convolver length
 convolve only partials or only phase or both
 midinote&velocity
+playback start pos
 interpolation
-----------
+
+---------
+eraser
+dice tool
+bake envelope, on off button
+self convolve
+copy channel L->R or R->L
+stereo selector: LL, RR, LR, RL
+normalise button
+width button
+
+----------------------
+export sample
+-------------------------------------------
+
 load sample as partials or phase
 load sample as convolver
 load sample into "mixer"
@@ -12,26 +27,24 @@ pitcher (partial multiply)
 stretcher (waveform resample)
 harmonise/noisify (copmress/expand partials)
 partial shift
-----------
----------
-export sample
-eraser
-dice tool
-bake envelope, on off button
-
-------------------------------------------------
-Undo
---------------------------------------------
---------------------------------------------
-
+cossfade tool
+save preset
+trim sample to length button
+when saving, trim zeros
+-------------------------------------
+------------------------------------
 graph more sensitive to zoom
 
 that special evenly spaced math phase tool
 
 plotG is slow maybe if it not in order
 
-
+Undo?
+--------------------------------------------
+*********************************************
+--------------------------------------------
 reverb
+LFO
 -----------------------------------------
 
 align plots by switchig from tsable to subplots
