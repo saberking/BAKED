@@ -1,14 +1,16 @@
-
+convolver length
+midinote&velocity
 load sample as partials or phase
+-----------
+pitcher (partial multiply)
+stretcher (waveform resample)
+harmonise/noisify (copmress/expand partials)
+partial shift
 
-
-
-convolver
-
-dice tool
-harmonise/noisify (scale partials)
 ------------------------------------------------
 Undo
+eraser
+dice tool
 
 graph more sensitive to zoom
 that special evenly spaced math phase tool
