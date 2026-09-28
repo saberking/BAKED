@@ -119,9 +119,6 @@ protected:
 
 
     void onImGuiDisplay() override {
-
-
-
         const float height = getHeight();
         const float width = getWidth();
 
@@ -132,21 +129,6 @@ protected:
 
         if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar))
         {
-
-
-            // if (ImGui::Button("Open editor"))
-            //     {
-            //         editor->show();
-            //         editor->focus();
-            //     }
-            //     ImGui::Separator();
-            //     ImGui::Spacing();
-            //     if(!editor->isVisible())
-            //     {
-            //         editor->displayPlaybackControls();
-            //         editor->displayEnvelope();
-            //     }
-
             editor->display();
         }
         if(!ImGui::IsMouseDown(ImGuiMouseButton_Left)) editor->endDrag();

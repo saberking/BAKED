@@ -472,7 +472,7 @@ public:
     }
     void handleDrag(int x, float y, std::function<void(int, float, int)> callback, int channel=0)
     {
-        if(selectedButtonIndex==1)
+        if(selectedButtonIndex!=2)
         {
             if(isDragging){
                 drawLine(x,y);

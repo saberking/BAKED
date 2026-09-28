@@ -14,6 +14,20 @@ START_NAMESPACE_DISTRHO
 #define MAX_POLY 128
 #define ENVELOPE_LENGTH 200
 
+enum InterpolationMode{
+    interpModeNone,
+    interpModeLinear
+};
+inline float interpolate(float lower, float upper, float position, InterpolationMode mode)
+{
+    if(mode==interpModeNone)
+    {
+        return lower;
+    }
+
+    float remainder=position-(int)position;
+    return lower*(1-remainder)+upper*remainder;
+}
 class AudioData
 {
 public:
@@ -176,12 +190,9 @@ struct Module {
         {
             float envelopeIndex=i*ENVELOPE_LENGTH/sample->length.load(std::memory_order_relaxed);
             int lower=(int)envelopeIndex;
-            float remainder=envelopeIndex-lower;
-            float envelopeValue=envelope[lower];
-            if(lower<ENVELOPE_LENGTH-1)
-            {
-                envelopeValue=envelopeValue*(1-remainder)+envelope[lower+1]*remainder;
-            }
+            int upper=std::min(ENVELOPE_LENGTH-1,lower+1);
+            float envelopeValue=interpolate(envelope[lower],envelope[upper],envelopeIndex, interpModeLinear);
+
             for(int j=0;j<2;j++)
             {
                 processed->sampleData[j][i].store(sample->sampleData[j][i].load(std::memory_order_relaxed)*envelopeValue, std::memory_order_relaxed);
