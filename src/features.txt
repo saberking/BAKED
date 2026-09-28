@@ -34,7 +34,7 @@ when saving, trim zeros
 -------------------------------------
 ------------------------------------
 graph more sensitive to zoom
-
+xaxis squared scale
 that special evenly spaced math phase tool
 
 plotG is slow maybe if it not in order
