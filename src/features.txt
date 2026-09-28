@@ -11,6 +11,7 @@ partial shift
 Undo
 eraser
 dice tool
+interpolation
 
 graph more sensitive to zoom
 that special evenly spaced math phase tool
