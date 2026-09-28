@@ -42,7 +42,7 @@ public:
         //create unique id for automation clip window
 
         // const double scaleFactor = getScaleFactor();
-        // setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH * scaleFactor, DISTRHO_UI_DEFAULT_HEIGHT * scaleFactor);
+        //setGeometryConstraints(1650, 900);
         setSize(1650,900);
 
         if (isResizable())
@@ -125,7 +125,16 @@ protected:
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(width , height ));
+        // ImGuiStyle& style = ImGui::GetStyle();
+        // float padding_x = style.WindowPadding.x * 2.0f;
+        // float padding_y = style.WindowPadding.y * 2.0f;
+        // // bool horizontal_scrollbar_needed = (width - padding_x) < 750.0f;
+        // // float scrollbar_offset_y = horizontal_scrollbar_needed ? style.ScrollbarSize : 0.0f;
 
+        // ImGui::SetNextWindowContentSize(ImVec2(
+        //     std::max(800.0f, width - padding_x),
+        //     0.f
+        //     ));
         if (ImGui::Begin("BAKED", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar))
         {
             editor->display();

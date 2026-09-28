@@ -611,88 +611,144 @@ public:
     }
     void displayToolbar()
     {
-        ImGui::PushFont(iconFont);
-        //const char* labels[] = { "hand.svg", "pencil.svg", "lineTool.svg" };
-        const char* labels[] = { HAND_ICON, PENCIL_ICON, LINE_ICON };
+        if (ImGui::BeginTable("Toolbar Table", 3, ImGuiTableFlags_SizingStretchSame| ImGuiTableFlags_SizingFixedFit)){
+            ImGui::TableSetupColumn("Left Empty", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Much Longer Header", ImGuiTableColumnFlags_WidthFixed, 0.0f);
+            ImGui::TableSetupColumn("Stretchy Column", ImGuiTableColumnFlags_WidthStretch); // (Optional mixed layout)
 
-        for (int i = 0; i < 3; i++) {
-            bool is_selected = (selectedButtonIndex == i);
+            ImGui::TableNextColumn();ImGui::TableNextColumn();
 
-            if (is_selected) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-            }
 
-            if (ImGui::Button(labels[i])) {
-                selectedButtonIndex = i; // Update selection state on click
-            }
+            // if(ImGui::BeginChild("Toolbar", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY))
+            // {
+                ImGui::PushFont(iconFont);
+                const char* labels[] = { HAND_ICON, PENCIL_ICON, LINE_ICON };
 
-            if (is_selected) {
-                ImGui::PopStyleColor(2);
-            }
+                for (int i = 0; i < 3; i++) {
+                    bool is_selected = (selectedButtonIndex == i);
 
-            if (i < 2) {
+                    if (is_selected) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+                    }
+
+                    if (ImGui::Button(labels[i])) {
+                        selectedButtonIndex = i; // Update selection state on click
+                    }
+
+                    if (is_selected) {
+                        ImGui::PopStyleColor(2);
+                    }
+
+                    if (i < 2) {
+                        ImGui::SameLine();
+                    }
+                }
+                ImGui::PopFont();
                 ImGui::SameLine();
-            }
+                if(ImGui::Checkbox("Live update", &isLiveUpdate))
+                {
+                    if(isLiveUpdate)
+                    {
+                        for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
+                        {
+
+                            if(isSpectrumChanged[j])calculateWaveform(j);
+                            if(isWaveformChanged[j])calculateFFT(j);
+                        }
+                    }
+                }
+                if(!isLiveUpdate)
+                {
+                    bool showUpdateButton=false;
+                    for(int j=0;j<data->channels.load(std::memory_order_relaxed);j++)
+                    {
+                        showUpdateButton=showUpdateButton||isSpectrumChanged[j]||isWaveformChanged[j];
+                    }
+
+                    if(showUpdateButton)
+                    {
+                        ImGui::SameLine();
+                        if(ImGui::Button("Apply changes"))
+                        {
+                            for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
+                            {
+
+                                if(isSpectrumChanged[j])calculateWaveform(j);
+                                if(isWaveformChanged[j])
+                                {
+                                    calculateFFT(j);
+                                    module->process();
+                                }
+                            }
+                        }
+                    }
+                }
+            // }
+            // ImGui::EndChild();
+            ImGui::EndTable();
         }
-        ImGui::PopFont();
     }
     void displayPlaybackControls()
     {
+        // if (ImGui::BeginChild("Playback", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY)) {
+        //     ImGui::Text("Playback");
 
 
-        // 3. Set the slider width to stretch up to that text boundary
-        ImGui::SetNextItemWidth(-100.f);
-        if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
-        {
-            if (ImGui::IsItemActivated())
+            // 3. Set the slider width to stretch up to that text boundary
+            ImGui::SetNextItemWidth(-100.f);
+            if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
             {
-                    editParameter(kParamSpeed, true);
-            }
-            fSpeed=std::max(0.f,std::min(1.f,fSpeed));
-
-            setParameterValue(kParamSpeed, fSpeed);
-
-        }
-        const uint32_t activeFormat = getPluginFormat();
-        if (activeFormat == 1)
-        {
-            if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-            {
-                const clap_host_t* host=static_cast<const clap_host_t*>(dspPointer->host);
-                HWND hwnd = reinterpret_cast<HWND>(parentWindow->getNativeWindowHandle());
-
-                if(host){
-                    // Query DAW for the context menu extension
-                    auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
-                    std::cout<<"menuExt"<<std::endl;
-                    if (menuExt && menuExt->popup)
-                    {
-                        std::cout<<"pop"<<std::endl;
-
-
-                        ImVec2 mousePos = ImGui::GetMousePos();
-
-                        auto* payload = new AsyncMenuPayload();
-                        payload->host = host;
-                        int xOffset=0,yOffset=0;
-                        // if (isVisible())getEmbeddedSubwindowOffset(xOffset,yOffset);
-                        payload->screenX = mousePos.x+xOffset;
-                        payload->screenY = mousePos.y+yOffset;
-
-                        ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
-                    }
+                if (ImGui::IsItemActivated())
+                {
+                        editParameter(kParamSpeed, true);
                 }
-                ImGuiIO& io = ImGui::GetIO();
-                io.MouseClicked[ImGuiMouseButton_Right] = false;
-                io.MouseDown[ImGuiMouseButton_Right] = false;
+                fSpeed=std::max(0.f,std::min(1.f,fSpeed));
+
+                setParameterValue(kParamSpeed, fSpeed);
 
             }
-        }
-        if (ImGui::IsItemDeactivated())
-        {
-            editParameter(kParamSpeed, false);
-        }
+            const uint32_t activeFormat = getPluginFormat();
+            if (activeFormat == 1)
+            {
+                if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+                {
+                    const clap_host_t* host=static_cast<const clap_host_t*>(dspPointer->host);
+                    HWND hwnd = reinterpret_cast<HWND>(parentWindow->getNativeWindowHandle());
+
+                    if(host){
+                        // Query DAW for the context menu extension
+                        auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
+                        std::cout<<"menuExt"<<std::endl;
+                        if (menuExt && menuExt->popup)
+                        {
+                            std::cout<<"pop"<<std::endl;
+
+
+                            ImVec2 mousePos = ImGui::GetMousePos();
+
+                            auto* payload = new AsyncMenuPayload();
+                            payload->host = host;
+                            int xOffset=0,yOffset=0;
+                            // if (isVisible())getEmbeddedSubwindowOffset(xOffset,yOffset);
+                            payload->screenX = mousePos.x+xOffset;
+                            payload->screenY = mousePos.y+yOffset;
+
+                            ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
+                        }
+                    }
+                    ImGuiIO& io = ImGui::GetIO();
+                    io.MouseClicked[ImGuiMouseButton_Right] = false;
+                    io.MouseDown[ImGuiMouseButton_Right] = false;
+
+                }
+            }
+            if (ImGui::IsItemDeactivated())
+            {
+                editParameter(kParamSpeed, false);
+            }
+        // }
+        // ImGui::EndChild();
     }
 
     void configureSmallGraph()
@@ -763,10 +819,10 @@ public:
 
     void displayConvolver()
     {
-        if (ImGui::BeginChild("Convolver", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY)) {
+        // if (ImGui::BeginChild("Convolver", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY)) {
 
             ImPlot::SetCurrentContext(imPlotContext[6]);
-            if(ImPlot::BeginPlot("Convolver",ImVec2(-1.0f, 200.0f))){
+            if(ImPlot::BeginPlot("Convolver##convolverplot",ImVec2(-1.0f, 200.0f))){
                 configureSmallGraph();
                 std::vector<float> xValues;
                 for(int i=0;i<ENVELOPE_LENGTH;i++)
@@ -792,22 +848,29 @@ public:
                 convolve();
             }
 
-        }
-        ImGui::EndChild();
+        // }
+        // ImGui::EndChild();
 
     }
 
     void displayProcessing()
     {
-        if(ImGui::Button("Compress"))
-        {
-            compress();
-        }
-        if(ImGui::Button("Filter"))
-        {
-            filter();
-        }
-        displayConvolver();
+        // if (ImGui::BeginChild("Processing", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY)) {
+        //     ImGui::Text("Processing");
+            displayConvolver();
+        ImGui::Separator();
+            if(ImGui::Button("Compress"))
+            {
+                compress();
+            }
+            ImGui::Separator();
+
+            if(ImGui::Button("Filter"))
+            {
+                filter();
+            }
+        // }
+        // ImGui::EndChild();
     }
 
 
@@ -823,47 +886,8 @@ public:
             else data->channels.store(2, std::memory_order_relaxed);
         }
         ImGui::SameLine();
-        displayToolbar();
 
-        ImGui::SameLine();
-        if(ImGui::Checkbox("Live update", &isLiveUpdate))
-        {
-            if(isLiveUpdate)
-            {
-                for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
-                {
 
-                    if(isSpectrumChanged[j])calculateWaveform(j);
-                    if(isWaveformChanged[j])calculateFFT(j);
-                }
-            }
-        }
-        if(!isLiveUpdate)
-        {
-            bool showUpdateButton=false;
-            for(int j=0;j<data->channels.load(std::memory_order_relaxed);j++)
-            {
-                showUpdateButton=showUpdateButton||isSpectrumChanged[j]||isWaveformChanged[j];
-            }
-
-            if(showUpdateButton)
-            {
-                ImGui::SameLine();
-                if(ImGui::Button("Apply changes"))
-                {
-                    for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
-                    {
-
-                        if(isSpectrumChanged[j])calculateWaveform(j);
-                        if(isWaveformChanged[j])
-                        {
-                            calculateFFT(j);
-                            module->process();
-                        }
-                    }
-                }
-            }
-        }
 
         float tempLength=length;
         ImGui::SliderFloat ("Length",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
@@ -886,8 +910,8 @@ public:
         }
 
 
-        ImVec2 plotSize(-1,270);
-        if (ImGui::BeginTable("My2ColumnTable", isMono?1:2))
+        ImVec2 plotSize(-1,265);
+        if (ImGui::BeginTable("SampleTable", isMono?1:2, ImGuiTableFlags_SizingStretchSame))
         {
             for(int channel=0;channel<1||!isMono&&channel<2;channel++){
                 ImGui::TableNextColumn();
@@ -1019,19 +1043,21 @@ public:
 
     void display()
     {
-        if (ImGui::BeginTable("my_resizable_table", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit))
+        displayToolbar();
+ImGui::Separator();
+        if (ImGui::BeginTable("Main Table", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchSame))
         {
-            ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthFixed, 1225.0f);
-            ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthStretch, 3.0f);
+            ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableNextColumn();
             displaySample();
 
             ImGui::TableNextColumn();
-
-
-            displayPlaybackControls();
-            displayEnvelope();
             displayProcessing();
+            ImGui::Separator();
+            displayEnvelope();
+            ImGui::Separator();
+            displayPlaybackControls();
 
             ImGui::EndTable();
         }
