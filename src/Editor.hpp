@@ -699,7 +699,7 @@ public:
     {
         setInputMap(true);
 
-        ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
+        ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
         ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.18, ImPlotCond_Always);
         ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
@@ -892,7 +892,7 @@ public:
                 if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L", plotSize)){
                     setInputMap(selectedButtonIndex);
 
-                    ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
+                    ImPlot::SetupAxis(ImAxis_Y1, "Pressure", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
 
                     ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
