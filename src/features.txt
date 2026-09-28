@@ -1,15 +1,19 @@
-Undo
 
 load sample as partials or phase
 
-that special evenly spaced math phase button
 
-iterative phase for new partials option
 
-compress, smooth, filter, fade in, fade out
+convolver
+
+dice tool
 
 ------------------------------------------------
+Undo
+
 graph more sensitive to zoom
+that special evenly spaced math phase tool
+
+plotG is slow maybe if it not in order
 
 
 

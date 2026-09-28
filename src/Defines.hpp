@@ -2,5 +2,6 @@
 #define DEFINES_HPP
 #define MAX_FILE_PATH_LENGTH 256
 
+#define NO_OF_PLOT_CONTEXTS 12
 
 #endif // DEFINES_HPP

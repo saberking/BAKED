@@ -62,12 +62,13 @@ public:
     ImGuiPluginDSP *dspPointer;
     Window *parentWindow;
     int selectedButtonIndex=0;
+    std::vector<float> convolver;
 
     ImFont *iconFont;
 
     SampleEditor(const char *_name, Module *_module, Window& _window,
                  std::function<void(const char*)> _fileDropped, std::function<void()> _setDirty,
-                 ImPlotContext* _imPlotContext [8],
+                 ImPlotContext* _imPlotContext [NO_OF_PLOT_CONTEXTS],
                  std::function<void(int, bool)> _editParameter,
                  std::function<void(int, float)> _setParameterValue,
                  ImGuiPluginDSP *_dSPPointer
@@ -86,6 +87,10 @@ public:
         spec.Flags = ImPlotFlags_CanvasOnly;
         // setResizable(true);
         // setSize(1675,1000);
+        for(int i=0;i<ENVELOPE_LENGTH;i++)
+        {
+            convolver.push_back(1.f);
+        }
 
         for(int channel=0;channel<2;channel++)
         {
@@ -424,6 +429,11 @@ public:
         module->envelope[x].store(std::max(0.f,std::min(1.f,y)), std::memory_order_relaxed);
         setDirty();
     }
+    void setConvolver(int x, float y)
+    {
+        if(x<0||x>=ENVELOPE_LENGTH) return;
+        convolver[x]=std::max(0.f,std::min(1.f,y));
+    }
     void startDrag(int x, float y, std::function<void(int, float, int)> callback, int channel)
     {
         isDragging=true;
@@ -549,6 +559,10 @@ public:
             }
         }
     }
+    void convolve ()
+    {
+        //
+    }
     void displayToolbar()
     {
         ImGui::PushFont(iconFont);
@@ -635,51 +649,53 @@ public:
         }
     }
 
+    void configureSmallGraph()
+    {
+        setInputMap(true);
+
+        ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
+        ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.18, ImPlotCond_Always);
+        ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
+
+        ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoGridLines|ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
+        ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
+        ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -10.0, 209.0);
+        ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, 219.0);
+
+
+
+        ImPlotSpec bound_spec;
+        bound_spec.LineColor = ImVec4(0.5f, 0.5f, 0.5f, 0.5f);
+        bound_spec.LineWeight = 1.5f;
+
+        // --- VERTICAL BOUNDS (From Y=0 to Y=1) ---
+        double v_line_y[] = { 0.0, 1.0 };
+        double v_line_x0[] = { 0.0, 0.0 };
+        double v_line_x200[] = { 200.0, 200.0 };
+
+        // Left vertical edge at X=0
+        ImPlot::PlotLine("##Vert0", v_line_x0, v_line_y, 2, bound_spec);
+
+        // Right vertical edge at X=200
+        ImPlot::PlotLine("##Vert200", v_line_x200, v_line_y, 2, bound_spec);
+
+
+        // --- HORIZONTAL BOUNDS (From X=0 to X=200) ---
+        double h_line_x[] = { 0.0, 200.0 };
+        double h_line_y0[] = { 0.0, 0.0 };
+        double h_line_y1[] = { 1.0, 1.0 };
+
+        // Bottom horizontal edge at Y=0
+        ImPlot::PlotLine("##Horiz0", h_line_x, h_line_y0, 2, bound_spec);
+
+        // Top horizontal edge at Y=1
+        ImPlot::PlotLine("##Horiz1", h_line_x, h_line_y1, 2, bound_spec);
+    }
+
     void displayEnvelope(){
         ImPlot::SetCurrentContext(imPlotContext[6]);
         if(ImPlot::BeginPlot("Envelope",ImVec2(-1.0f, 200.0f))){
-            setInputMap(true);
-
-            ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
-            ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.18, ImPlotCond_Always);
-            ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
-
-            ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoGridLines|ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
-            ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
-            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -10.0, 209.0);
-            ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, 219.0);
-
-
-
-            ImPlotSpec bound_spec;
-            bound_spec.LineColor = ImVec4(0.5f, 0.5f, 0.5f, 0.5f);
-            bound_spec.LineWeight = 1.5f;
-
-            // --- VERTICAL BOUNDS (From Y=0 to Y=1) ---
-            double v_line_y[] = { 0.0, 1.0 };
-            double v_line_x0[] = { 0.0, 0.0 };
-            double v_line_x200[] = { 200.0, 200.0 };
-
-            // Left vertical edge at X=0
-            ImPlot::PlotLine("##Vert0", v_line_x0, v_line_y, 2, bound_spec);
-
-            // Right vertical edge at X=200
-            ImPlot::PlotLine("##Vert200", v_line_x200, v_line_y, 2, bound_spec);
-
-
-            // --- HORIZONTAL BOUNDS (From X=0 to X=200) ---
-            double h_line_x[] = { 0.0, 200.0 };
-            double h_line_y0[] = { 0.0, 0.0 };
-            double h_line_y1[] = { 1.0, 1.0 };
-
-            // Bottom horizontal edge at Y=0
-            ImPlot::PlotLine("##Horiz0", h_line_x, h_line_y0, 2, bound_spec);
-
-            // Top horizontal edge at Y=1
-            ImPlot::PlotLine("##Horiz1", h_line_x, h_line_y1, 2, bound_spec);
-
-
-
+            configureSmallGraph();
             ImPlot::PlotScatterG("Envelope", envelopeGetter, &dspPointer->modules[0]->envelope, ENVELOPE_LENGTH, spec);
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
@@ -688,15 +704,47 @@ public:
                     (int)current_pos.x,current_pos.y,
                     [this](int x, float y, int dummy){this->setEnvelope(x,y);}
                     );
-                if (isLiveUpdate)
-                {
-                    module->process();
-                }
+                // if (isLiveUpdate)
+                // {
+                //     module->process();
+                // }
 
             }
             ImPlot::EndPlot();
 
         }
+    }
+
+    void displayConvolver()
+    {
+
+        ImPlot::SetCurrentContext(imPlotContext[6]);
+        if(ImPlot::BeginPlot("Convolver",ImVec2(-1.0f, 200.0f))){
+            configureSmallGraph();
+            std::vector<float> xValues;
+            for(int i=0;i<ENVELOPE_LENGTH;i++)
+            {
+                xValues.push_back(i);
+            }
+            ImPlot::PlotScatter("Convolver", xValues.data(), convolver.data(), ENVELOPE_LENGTH, spec);
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+
+                handleDrag(
+                    (int)current_pos.x,current_pos.y,
+                    [this](int x, float y, int dummy){this->setConvolver(x,y);}
+                    );
+
+
+            }
+            ImPlot::EndPlot();
+
+        }
+        if(ImGui::Button("Convolve"))
+        {
+            convolve();
+        }
+
     }
 
     void displayProcessing()
@@ -709,6 +757,7 @@ public:
         {
             filter();
         }
+        displayConvolver();
     }
 
 

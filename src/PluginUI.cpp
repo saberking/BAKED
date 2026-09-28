@@ -25,14 +25,13 @@ START_NAMESPACE_DISTRHO
 
 
 //for right click autmoaiton clip
-
 class ImGuiPluginUI : public UI, public FileDropReceiver
 {
     ResizeHandle fResizeHandle;
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
     SampleEditor *editor=NULL;
     MyOleDropTarget *oleDropTarget=NULL;
-    ImPlotContext* imPlotContext[8];
+    ImPlotContext* imPlotContext[NO_OF_PLOT_CONTEXTS];
     bool editEnvelope=true;
 public:
 
@@ -49,7 +48,7 @@ public:
         if (isResizable())
             fResizeHandle.hide();
 
-        for(int i=0;i<8;i++){
+        for(int i=0;i<NO_OF_PLOT_CONTEXTS;i++){
             imPlotContext[i]=ImPlot::CreateContext();
         }
 
