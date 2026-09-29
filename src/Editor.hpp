@@ -912,7 +912,7 @@ public:
 
 
         ImVec2 plotSize(-1,260);
-        if (ImGui::BeginTable("SampleTable", isMono?1:2, ImGuiTableFlags_SizingStretchSame))
+        if (ImGui::BeginTable("SampleTable", isMono?1:2, ImGuiTableFlags_SizingStretchSame|ImGuiTableFlags_Resizable))
         {
             for(int channel=0;channel<1||!isMono&&channel<2;channel++){
                 ImGui::TableNextColumn();
@@ -959,17 +959,6 @@ public:
                     ImPlot::EndPlot();
 
                 }
-            }
-            ImGui::EndTable();
-        }
-
-
-
-        if (ImGui::BeginTable("SpectrumTable", isMono?1:2, ImGuiTableFlags_SizingStretchSame))
-        {
-
-            for(int channel=0;channel<1||!isMono&&channel<2;channel++){
-                ImGui::TableNextColumn();
 
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
 
@@ -1009,10 +998,7 @@ public:
                     ImPlot::EndPlot();
                 }
 
-            }
 
-            for(int channel=0;channel<1||!isMono&&channel<2;channel++){
-                ImGui::TableNextColumn();
 
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
                 if (ImPlot::BeginPlot(channel?"Phase R":"Phase L", plotSize)){
@@ -1055,7 +1041,12 @@ public:
     void display()
     {
         displayToolbar();
+        float separator_width = ImGui::GetContentRegionAvail().x-ImGui::GetStyle().ScrollbarSize;
+        ImGui::BeginChild("ShortSeparator", ImVec2(separator_width, 2), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
         ImGui::Separator();
+
+        ImGui::EndChild();
         if(ImGui::BeginTable("Main Table", 2, ImGuiTableFlags_SizingStretchSame|ImGuiTableFlags_Resizable))
         {
             ImGui::TableSetupColumn("Master Column", ImGuiTableColumnFlags_WidthStretch, 2.f);

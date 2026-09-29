@@ -1,3 +1,4 @@
+save convolver when ui closed
 convolver length and minimum value
 convolve only partials or only phase or both
 midinote&velocity
@@ -39,7 +40,7 @@ load sample into "mixer"
 
 -----------
 pitcher (partial multiply or divide and round)
-stretcher (waveform resample)
+stretcher (waveform resample by keeping partials and changing length)
 harmonise/noisify (copmress/expand partials)
 partial shift
 -----------------
