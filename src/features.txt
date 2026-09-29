@@ -1,24 +1,30 @@
 
-copy and paste tools
 Undo tool
+redo tool
 zero tool
+
+-------------------------
+make convolver and envelope min -1
+make envelope length sample length
+convolver length
+
+copy and paste tools
+
 playstart tool
 
+Save everything properly
 
 --------------------------
 
 
-make convolver min -1
 save convolver and undo history when ui closed
-convolver length
 
 midinote&velocity
 interpolation
 
 normalise button
-stereo bleed button
+stereo blend button
 
-Save everything properly
 
 -----------------------------------
 ************************************
