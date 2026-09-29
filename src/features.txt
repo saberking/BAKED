@@ -19,7 +19,6 @@ stereo bleed button
 self convolve
 copy channel L->R or R->L
 stereo selector: LL, RR, LR, RL
-fix reaper initial size
 -----------------------------------
 ************************************
 -------------------------------------

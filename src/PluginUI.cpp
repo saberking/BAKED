@@ -33,6 +33,8 @@ class ImGuiPluginUI : public UI, public FileDropReceiver
     MyOleDropTarget *oleDropTarget=NULL;
     ImPlotContext* imPlotContext[NO_OF_PLOT_CONTEXTS];
     bool editEnvelope=true;
+    int defaultWidth,defaultHeight;
+    bool isFirstFrame=true;
 public:
 
     ImGuiPluginUI()
@@ -42,8 +44,9 @@ public:
         //create unique id for automation clip window
 
         // const double scaleFactor = getScaleFactor();
-        //setGeometryConstraints(1650, 900);
-        setSize(1335,890);
+        defaultWidth=1335;
+        defaultHeight=890;
+        setSize(defaultWidth,defaultHeight);
 
         if (isResizable())
             fResizeHandle.hide();
@@ -118,6 +121,12 @@ protected:
 
 
     void onImGuiDisplay() override {
+        if(isFirstFrame)
+        {
+            setSize(defaultWidth, defaultHeight);
+            isFirstFrame=false;
+        }
+
         const float height = getHeight();
         const float width = getWidth();
 
