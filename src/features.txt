@@ -1,21 +1,23 @@
-eraser tool
-
-zero tool
+copy and paste tools
 
 make convolver min -1
 save convolver when ui closed
 convolver length
-midinote&velocity
-interpolation
+
 
 ---------
+
+Undo
+
+midinote&velocity
+interpolation
 
 normalise button
 stereo bleed button
 
-copy and paste tools
-playback start pos tool
-Undo
+zero tool
+playstart tool
+
 -----------------------------------
 ************************************
 -------------------------------------
