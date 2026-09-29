@@ -76,6 +76,10 @@ public:
     }
 
     void setDroppedFilePath(const char* path) override {
+        for(int i=0;i<2;i++)
+        {
+            editor->addUndoItem(&(editor->module->sample->sampleData[i]),i==1);
+        }
         getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
         strcpy(sampleFilePath, path);
         bool isMono=(getPluginDPSPointer()->modules[0]->sample->channels.load(std::memory_order_relaxed)==1);

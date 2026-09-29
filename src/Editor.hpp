@@ -127,7 +127,7 @@ public:
         toolbarButtonsPaste,
         toolbarButtonsCount
     };
-    ToolbarButtons selectedButtonIndex=toolbarButtonsCount;
+    ToolbarButtons selectedButtonIndex=toolbarButtonsHand;
     static constexpr const char* toolbarIcons[6] = { HAND_ICON, PENCIL_ICON, LINE_ICON, ERASER_ICON,COPY_ICON,PASTE_ICON };
 
     enum DataType{
@@ -935,19 +935,24 @@ public:
             int lastIndex=(currentIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH;
             bool canRedo=(undoItems[nextUndoIndex]&&!(undoItems[currentIndex]&&undoItems[currentIndex]->isHead));
             bool canUndo=(undoItems[currentIndex]&&undoCount);
-
+            ImGui::BeginDisabled(!canUndo);
             if(ImGui::Button(UNDO_ICON)&&canUndo)
             {
 
                 undo();
             }
+            ImGui::EndDisabled();
             ImGui::SameLine();
+
+            ImGui::BeginDisabled(!canRedo);
+
 
             if(ImGui::Button(REDO_ICON)&&canRedo)
             {
 
                 redo();
             }
+            ImGui::EndDisabled();
 
             ImGui::PopFont();
             ImGui::SameLine();
