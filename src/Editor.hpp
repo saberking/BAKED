@@ -622,8 +622,7 @@ public:
                 drawLine(dragEndX,dragEndY);
                 if(isLiveUpdate)
                 {
-                    if(dragDataType==dataTypeSpectrumL||dragDataType==dataTypePhaseL) addUndoItem(&(module->sample->sampleData[0]));
-                    if(dragDataType==dataTypeSpectrumR||dragDataType==dataTypePhaseR) addUndoItem(&(module->sample->sampleData[1]));
+                    addLiveUpdateUndoItem();
                     for(int i=0;i<2;i++)
                     {
                         if(isSpectrumChanged[i])
@@ -641,7 +640,9 @@ public:
             }
             if(selectedButtonIndex==toolbarButtonsEraser)
             {
+                addDragUndoItem();
                 dragCallback(dragEndX,0.f, dragChannel);
+                if(isLiveUpdate)addLiveUpdateUndoItem();
             }
             isDragging=false;
 
@@ -649,18 +650,27 @@ public:
 
         }
     }
+    void addDragUndoItem()
+    {
+        if(dragDataType==dataTypeWaveL)
+            addUndoItem(&(module->sample->sampleData[0]));
+        if(dragDataType==dataTypeWaveR)
+            addUndoItem(&(module->sample->sampleData[1]));
+        if(dragDataType==dataTypeEnvelope)
+            addUndoItem(&(module->envelope));
+        if(dragDataType==dataTypeConvolver)
+            addUndoItem(convolver);
+    }
+    void addLiveUpdateUndoItem()
+    {
+        if(dragDataType==dataTypeSpectrumL||dragDataType==dataTypePhaseL) addUndoItem(&(module->sample->sampleData[0]));
+        if(dragDataType==dataTypeSpectrumR||dragDataType==dataTypePhaseR) addUndoItem(&(module->sample->sampleData[1]));
+    }
     void drawLine(int x, float y)
     {
         if(selectedButtonIndex==toolbarButtonsLine)
         {
-            if(dragDataType==dataTypeWaveL)
-                addUndoItem(&(module->sample->sampleData[0]));
-            if(dragDataType==dataTypeWaveR)
-                addUndoItem(&(module->sample->sampleData[1]));
-            if(dragDataType==dataTypeEnvelope)
-                addUndoItem(&(module->envelope));
-            if(dragDataType==dataTypeConvolver)
-                addUndoItem(convolver);
+            addDragUndoItem();
         }
 
         int xStep = x>dragStartX?1:-1;
