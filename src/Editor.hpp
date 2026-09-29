@@ -109,6 +109,7 @@ public:
     std::function<void(int, float)> setParameterValue;
     int length;
     bool isDragging=false;
+    bool isDragSavedForUndo=false;
     float  dragStartY, dragEndY;
     int dragStartX, dragEndX;
     std::function<void(int,float,int)> dragCallback;
@@ -605,24 +606,31 @@ public:
     }
     void startDrag(int x, float y, std::function<void(int, float, int)> callback, int channel, DataType type)
     {
+        std::cout<<"starting drag"<<std::endl;
         isDragging=true;
         dragStartX=x;
         dragStartY=y;
         dragCallback=callback;
         dragChannel=channel;
         dragDataType=type;
+        if(!isDragSavedForUndo)
+        {
+            isDragSavedForUndo=true;
+            addDragUndoItem();
+        }
     }
     void endDrag()
     {
+        isDragSavedForUndo=false;
         if(isDragging)
         {
+            std::cout<<"ending dra "<<(int)selectedButtonIndex<<std::endl;
             if(selectedButtonIndex==toolbarButtonsLine)
             {
 
                 drawLine(dragEndX,dragEndY);
                 if(isLiveUpdate)
                 {
-                    addLiveUpdateUndoItem();
                     for(int i=0;i<2;i++)
                     {
                         if(isSpectrumChanged[i])
@@ -640,9 +648,7 @@ public:
             }
             if(selectedButtonIndex==toolbarButtonsEraser)
             {
-                addDragUndoItem();
                 dragCallback(dragEndX,0.f, dragChannel);
-                if(isLiveUpdate)addLiveUpdateUndoItem();
             }
             isDragging=false;
 
@@ -660,6 +666,7 @@ public:
             addUndoItem(&(module->envelope));
         if(dragDataType==dataTypeConvolver)
             addUndoItem(convolver);
+        addLiveUpdateUndoItem();
     }
     void addLiveUpdateUndoItem()
     {
@@ -668,10 +675,7 @@ public:
     }
     void drawLine(int x, float y)
     {
-        if(selectedButtonIndex==toolbarButtonsLine)
-        {
-            addDragUndoItem();
-        }
+
 
         int xStep = x>dragStartX?1:-1;
         int noOfSteps=std::abs(x-dragStartX)+1;
