@@ -1,6 +1,5 @@
 
 
-make convolver and envelope min -1
 make envelope length sample length
 convolver length
 
