@@ -30,6 +30,7 @@ load sample into "mixer"
 
 save preset
 -----------------------------------
+************************************
 -------------------------------------
 pitcher (partial multiply)
 stretcher (waveform resample)
@@ -45,7 +46,7 @@ when saving, trim zeros
 graph more sensitive to zoom
 xaxis squared scale
 that special evenly spaced math phase tool
-
+hand tool scrolls window
 plotG is slow maybe if it not in order
 
 Undo?

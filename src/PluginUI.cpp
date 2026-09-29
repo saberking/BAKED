@@ -43,7 +43,7 @@ public:
 
         // const double scaleFactor = getScaleFactor();
         //setGeometryConstraints(1650, 900);
-        setSize(1650,900);
+        setSize(1200,800);
 
         if (isResizable())
             fResizeHandle.hide();
