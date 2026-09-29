@@ -1,42 +1,49 @@
+eraser tool
+
+zero tool
+
+convolver and envelope respect tool
+
+make convolver min -1
 save convolver when ui closed
-convolver length and minimum value
-convolve only partials or only phase or both
+convolver length
 midinote&velocity
 interpolation
 
 ---------
-dice tool
-
 
 normalise button
-
----------
-eraser
-
 stereo bleed button
 
--------------
-
-self convolve
-copy channel L->R or R->L
+copy and paste tools
 stereo selector: LL, RR, LR, RL
+playback start pos tool
+
 -----------------------------------
 ************************************
 -------------------------------------
-playback start pos
+
+
+****zoom tool, leftclick to zoom in right to zoom out****
+****graph more sensitive to zoom                     ****
+****xaxis squared scale                              ****
+****load sample as partials or phase                 ****
+****load sample as convolver                         ****
+****load sample into "mixer"                         ****
+
+-----------------------------------
+************************************
+-------------------------------------
+convolver only partials or only phase or both
+
+dice tool
+self convolve
 
 export sample
+save preset
 
 HiDPI awareness
 resize UI
-save preset
-
-----------------------------------
-bake envelope, on off button
-
-load sample as partials or phase
-load sample as convolver
-load sample into "mixer"
 
 -----------
 pitcher (partial multiply or divide and round)
@@ -44,19 +51,19 @@ stretcher (waveform resample by keeping partials and changing length)
 harmonise/noisify (copmress/expand partials)
 partial shift
 -----------------
+Undo?
+
 cossfade tool
 
 trim sample to length button
 when saving, trim zeros
 -------------------------------------
 
-graph more sensitive to zoom
-xaxis squared scale
+
 that special evenly spaced math phase tool
-hand tool scrolls window
+
 plotG is slow maybe if it not in order
 
-Undo?
 --------------------------------------------
 *********************************************
 --------------------------------------------
