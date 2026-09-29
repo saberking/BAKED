@@ -80,7 +80,8 @@ public:
         toolbarButtonsCopy,
         toolbarButtonsPaste,
         toolbarButtonsCount
-    } selectedButtonIndex=toolbarButtonsCount;
+    };
+    ToolbarButtons selectedButtonIndex=toolbarButtonsCount;
     static constexpr const char* toolbarIcons[6] = { HAND_ICON, PENCIL_ICON, LINE_ICON, ERASER_ICON,COPY_ICON,PASTE_ICON };
 
     ImFont *iconFontLarge,*iconFontRegular;
@@ -476,6 +477,67 @@ public:
         if(x<0||x>=ENVELOPE_LENGTH) return;
         (*convolver)[x]=std::max(0.f,std::min(1.f,y));
     }
+    void erase(std::vector<float> &vec, int start, int end)
+    {
+        auto move_target = vec.begin() + std::min(start, end);
+        auto move_source = move_target + std::abs(start-end);
+        int target_idx = std::distance(vec.begin(), move_target);
+        int source_idx = std::distance(vec.begin(), move_source);
+
+        std::cout << "Erasong!!!!!!!!!!!!!!" << target_idx << ", " << source_idx << std::endl;
+
+        std::move(move_source, vec.end(), move_target);
+
+        auto pad_start = vec.end() - std::abs(start-end);
+        std::fill(pad_start, vec.end(), 0.f);
+    }
+    void erase(std::vector<std::atomic<float>> &vec, int start, int end)
+    {
+        int start_idx = std::min(start, end);
+        int end_idx = std::max(start, end);
+        int count = end_idx - start_idx;
+
+        if (count <= 0 || start_idx >= vec.size()) return;
+
+        // 1. Shift everything after the deleted chunk to the left (your std::move replacement)
+        int write_ptr = start_idx;
+        int read_ptr = end_idx;
+        int total_elements = static_cast<int>(vec.size());
+
+        while (read_ptr < total_elements) {
+            float value_to_move = vec[read_ptr].load(std::memory_order_relaxed);
+            vec[write_ptr].store(value_to_move, std::memory_order_relaxed);
+            write_ptr++;
+            read_ptr++;
+        }
+
+        // 2. Pad the end of the vector with zeros (your std::fill replacement)
+        while (write_ptr < total_elements) {
+            vec[write_ptr].store(0.0f, std::memory_order_relaxed);
+            write_ptr++;
+        }
+    }
+    void eraseWaveform(int x, float y, int channel)
+    {
+        int start=std::max(0,std::min(MAX_SAMPLE_LENGTH-1,dragStartX));
+        int end=std::max(0,std::min(MAX_SAMPLE_LENGTH-1,x));
+
+        erase(module->sample->sampleData[channel], start, end);
+
+    }
+    void eraseEnvelope(int x, float y)
+    {
+        int start=std::max(0,std::min(ENVELOPE_LENGTH-1,dragStartX));
+        int end=std::max(0,std::min(ENVELOPE_LENGTH-1,x));
+        erase(module->envelope,start,end);
+    }
+    void eraseConvolver(int x, float y)
+    {
+        int start=std::max(0,std::min(MAX_SAMPLE_LENGTH-1,dragStartX));
+        int end=std::max(0,std::min(MAX_SAMPLE_LENGTH-1,x));
+
+        erase(*convolver, start, end);
+    }
     void startDrag(int x, float y, std::function<void(int, float, int)> callback, int channel)
     {
         isDragging=true;
@@ -488,24 +550,34 @@ public:
     {
         if(isDragging)
         {
-            drawLine(dragEndX,dragEndY);
-            isDragging=false;
-            if(isLiveUpdate)
+            if(selectedButtonIndex==toolbarButtonsLine)
             {
-                for(int i=0;i<2;i++)
+                drawLine(dragEndX,dragEndY);
+                if(isLiveUpdate)
                 {
-                    if(isSpectrumChanged[i])
+                    for(int i=0;i<2;i++)
                     {
-                        calculateWaveform(i);
-                    }
-                    if(isWaveformChanged[i])
-                    {
-                        calculateFFT(i);
-                    }
+                        if(isSpectrumChanged[i])
+                        {
+                            calculateWaveform(i);
+                        }
+                        if(isWaveformChanged[i])
+                        {
+                            calculateFFT(i);
+                        }
 
+                    }
+                    module->process();
                 }
-                module->process();
             }
+            if(selectedButtonIndex==toolbarButtonsEraser)
+            {
+                dragCallback(dragEndX,0.f, dragChannel);
+            }
+            isDragging=false;
+
+
+
         }
     }
     void drawLine(int x, float y)
@@ -532,7 +604,7 @@ public:
                 callback(x, y, channel);
             }
             startDrag(x,y, callback, channel);
-        }else if(selectedButtonIndex==toolbarButtonsLine){
+        }else if(selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser){
             if(!isDragging)
                 startDrag(x,y, callback, channel);
         }
@@ -836,12 +908,14 @@ public:
             ImPlot::PlotScatterG("Envelope", envelopeGetter, &dspPointer->modules[0]->envelope, ENVELOPE_LENGTH, spec);
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
             {
-                if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine) {
+                if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser) {
                     ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
                     handleDrag(
                         (int)current_pos.x,current_pos.y,
-                        [this](int x, float y, int dummy){this->setEnvelope(x,y);}
+                        [this](int x, float y, int dummy){
+                            this->selectedButtonIndex==toolbarButtonsEraser?this->eraseEnvelope(x,y):this->setEnvelope(x,y);
+                        }
                         );
                     // if (isLiveUpdate)
                     // {
@@ -868,13 +942,15 @@ public:
             ImPlot::PlotScatter("Convolver", xValues.data(), (*convolver).data(), ENVELOPE_LENGTH, spec);
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
             {
-                if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine)
+                if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
                 {
                     ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
                     handleDrag(
                         (int)current_pos.x,current_pos.y,
-                        [this](int x, float y, int dummy){this->setConvolver(x,y);}
+                        [this](int x, float y, int dummy){
+                            this->selectedButtonIndex==toolbarButtonsEraser?this->eraseConvolver(x,y):this->setConvolver(x,y);
+                        }
                         );
 
                 }
@@ -970,14 +1046,16 @@ public:
                     ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &plotAudioContext, data->length.load(std::memory_order_relaxed), spec);
                     if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
                     {
-                        if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine)
+                        if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
                         {
                             if(isSpectrumChanged[channel])calculateWaveform(channel);
                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
                             handleDrag(
                                 (int)current_pos.x,current_pos.y,
-                                [this]( int x, float y, int channel){this->setWaveformSample(x,y,channel);},
+                                [this]( int x, float y, int channel){
+                                    this->selectedButtonIndex==toolbarButtonsEraser?this->eraseWaveform(x,y, channel):this->setWaveformSample(x,y,channel);
+                                },
                                 channel
                                 );
                             int newLength=std::max(
@@ -1024,7 +1102,9 @@ public:
 
                             handleDrag(
                                 (int)current_pos.x,current_pos.y,
-                                [this](int x, float y, int channel){this->setSpectrumAmplitude(x,y,channel);},
+                                [this](int x, float y, int channel){
+                                    this->setSpectrumAmplitude(x,y,channel);
+                                },
                                 channel
                                 );
 
@@ -1066,7 +1146,9 @@ public:
 
                             handleDrag(
                                 (int)current_pos.x,current_pos.y,
-                                [this](int x, float y, int channel){this->setSpectrumPhase(x,y,channel);},
+                                [this](int x, float y, int channel){
+                                    this->setSpectrumPhase(x,y,channel);
+                                },
                                 channel
                                 );
                             if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
