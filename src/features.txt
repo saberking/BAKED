@@ -14,7 +14,6 @@ normalise button
 stereo bleed button
 
 copy and paste tools
-stereo selector: LL, RR, LR, RL
 playback start pos tool
 Undo
 -----------------------------------
