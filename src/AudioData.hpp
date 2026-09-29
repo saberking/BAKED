@@ -18,6 +18,14 @@ enum InterpolationMode{
     interpModeNone,
     interpModeLinear
 };
+
+enum SpeakerConnections{
+    speakerLL,
+    speakerLR,
+    speakerRL,
+    speakerRR
+};
+
 inline float interpolate(float lower, float upper, float position, InterpolationMode mode)
 {
     if(mode==interpModeNone)
@@ -65,7 +73,9 @@ public:
         int totalFrames = (int)wav.totalPCMFrameCount;
         std::cout << audioFileChannels << " channels" << std::endl;
 
-        channels.store(std::max(1, std::min(2, audioFileChannels)), std::memory_order_relaxed);
+        int noOfChannels=std::max(1, std::min(2, audioFileChannels));
+        channels.store(noOfChannels, std::memory_order_relaxed);
+
         std::cout << "stored channels" << std::endl;
 
         // Bind buffer limit sizes safely
@@ -138,6 +148,7 @@ struct Module {
     bool *releaseEnabled=NULL;
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
     std::vector<std::atomic<float>> envelope;
+    std::atomic<SpeakerConnections> speakerConnections=speakerLL;
 
     SamplePlaybackEngineMonophonic * playbackData[MAX_POLY];
 
@@ -207,14 +218,19 @@ struct Module {
         recipLength=((float)ENVELOPE_LENGTH)/((float)std::max(1,sample->length.load(std::memory_order_relaxed)));
 
         outputs[0]=outputs[1]=0;
-        float tempOuts[2];
+        float tempOuts[2], tempOutsSum[]={0,0};
         for(int i=0;i<MAX_POLY;i++){
             if(playbackData[i]->playing)
             {
                 playbackData[i]->run(tempOuts, recipLength);
-                outputs[0]+=tempOuts[0];outputs[1]+=tempOuts[1];
+                tempOutsSum[0]+=tempOuts[0];tempOutsSum[1]+=tempOuts[1];
             }
         }
+        SpeakerConnections connections=speakerConnections.load(std::memory_order_relaxed);
+        if(connections==speakerLL||connections==speakerLR)outputs[0]=tempOutsSum[0];
+        else outputs[0]=tempOutsSum[1];
+        if(connections==speakerLR||connections==speakerRR)outputs[1]=tempOutsSum[1];
+        else outputs[1]=tempOutsSum[0];
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Module)
 

@@ -33,7 +33,7 @@ class ImGuiPluginUI : public UI, public FileDropReceiver
     MyOleDropTarget *oleDropTarget=NULL;
     ImPlotContext* imPlotContext[NO_OF_PLOT_CONTEXTS];
     bool editEnvelope=true;
-    int defaultWidth=1320,defaultHeight=880;
+    int defaultWidth=1335,defaultHeight=890;
     bool isFirstFrame=true;
 public:
 
@@ -78,12 +78,15 @@ public:
     void setDroppedFilePath(const char* path) override {
         getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
         strcpy(sampleFilePath, path);
-        editor->isMono=(getPluginDPSPointer()->modules[0]->sample->channels.load(std::memory_order_relaxed)==1);
+        bool isMono=(getPluginDPSPointer()->modules[0]->sample->channels.load(std::memory_order_relaxed)==1);
+        editor->module->speakerConnections.store(speakerLR);
+        if(isMono) editor->module->speakerConnections.store(speakerLL);
         for(int i =0;i<2;i++)
         {
             editor->calculateFFT(i);
-            getPluginDPSPointer()->modules[0]->process();
         }
+        getPluginDPSPointer()->modules[0]->process();
+
         setDirty();
     }
 

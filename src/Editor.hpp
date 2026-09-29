@@ -18,10 +18,19 @@
 
 
 START_NAMESPACE_DISTRHO
+#define LL_ICON     "\x36"
+#define LR_ICON     "\x37"
+#define RL_ICON     "\x38"
+#define RR_ICON     "\x39"
 #define HAND_ICON   "\x3a"
 #define LINE_ICON   "\x3b"
 #define PENCIL_ICON "\x3c"
 #define UNDO_ICON   "\x3d"
+#define COPY_ICON   "\x3e"
+#define PASTE_ICON  "\x3f"
+#define PLAYSTART_ICON "\x40"
+#define ERASER_ICON "\x41"
+#define ZERO_ICON   "\x42"
 struct PlotAudioContext {
     AudioData* audioData;
     int channel;
@@ -41,7 +50,6 @@ public:
     AudioData *data=NULL;
     Module *module=NULL;
     ImPlotSpec spec;
-    bool isMono;
     ImPlotContext** imPlotContext;
     std::vector<std::complex<float>> *spectrum[2] ;
     std::vector<float> *convolver;
@@ -66,7 +74,7 @@ public:
     Window *parentWindow;
     int selectedButtonIndex=0;
 
-    ImFont *iconFont;
+    ImFont *iconFontLarge,*iconFontRegular;
 
     SampleEditor(const char *_name, Module *_module, Window& _window,
                  std::function<void(const char*)> _fileDropped, std::function<void()> _setDirty,
@@ -111,7 +119,6 @@ public:
             (*convolverSpectrum)[j]=std::complex(0,0);
         }
 
-        isMono=(data->channels.load()==1);
         isSpectrumChanged[0]=isSpectrumChanged[1]=false;
         for(int channel=0;channel<2;channel++)
         {
@@ -143,10 +150,17 @@ public:
         config.FontDataOwnedByAtlas = false; // Prevents global array memory freeing crash
 
         // Save the returned pointer to a global or class variable (e.g., ImFont* m_IconFont)
-        iconFont = io.Fonts->AddFontFromMemoryTTF(
+        iconFontRegular = io.Fonts->AddFontFromMemoryTTF(
             (void*)Untitled1_ttf,
             sizeof(Untitled1_ttf),
-            20.0f,
+            22.0f,
+            &config
+            );
+
+        iconFontLarge = io.Fonts->AddFontFromMemoryTTF(
+            (void*)Untitled1_ttf,
+            sizeof(Untitled1_ttf),
+            24.0f,
             &config
             );
 
@@ -609,6 +623,43 @@ public:
 
 
     }
+
+
+    void displayButtonSelector(const char**labels,int length,int &selectedIndex, bool large=false)
+    {
+        if(large)ImGui::PushFont(iconFontLarge);
+        else ImGui::PushFont(iconFontRegular);
+
+        for (int i = 0; i < length; i++) {
+            bool is_selected = (selectedIndex == i);
+
+            if (is_selected) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+            }
+
+            if (ImGui::Button(labels[i])) {
+                selectedIndex = i; // Update selection state on click
+            }
+
+            if (is_selected) {
+                ImGui::PopStyleColor(2);
+            }
+
+            if (i < length-1) {
+                ImGui::SameLine();
+            }
+        }
+        ImGui::PopFont();
+
+    }
+    void displaySpeakerConnections()
+    {
+        const char *labels[]={LL_ICON,LR_ICON,RL_ICON,RR_ICON};
+        int temp=module->speakerConnections.load(std::memory_order_relaxed);
+        displayButtonSelector(labels,4,temp);
+        module->speakerConnections.store(static_cast<SpeakerConnections>( temp),std::memory_order_relaxed);
+    }
     void displayToolbar()
     {
         if (ImGui::BeginTable("Toolbar Table", 3, ImGuiTableFlags_SizingStretchSame| ImGuiTableFlags_SizingFixedFit)){
@@ -621,30 +672,10 @@ public:
 
             // if(ImGui::BeginChild("Toolbar", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY))
             // {
-                ImGui::PushFont(iconFont);
-                const char* labels[] = { HAND_ICON, PENCIL_ICON, LINE_ICON };
+            const char* labels[] = { HAND_ICON, PENCIL_ICON, LINE_ICON };
 
-                for (int i = 0; i < 3; i++) {
-                    bool is_selected = (selectedButtonIndex == i);
+            displayButtonSelector(labels,3,selectedButtonIndex, true);
 
-                    if (is_selected) {
-                        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-                    }
-
-                    if (ImGui::Button(labels[i])) {
-                        selectedButtonIndex = i; // Update selection state on click
-                    }
-
-                    if (is_selected) {
-                        ImGui::PopStyleColor(2);
-                    }
-
-                    if (i < 2) {
-                        ImGui::SameLine();
-                    }
-                }
-                ImGui::PopFont();
                 ImGui::SameLine();
                 if(ImGui::Checkbox("Live update", &isLiveUpdate))
                 {
@@ -663,7 +694,7 @@ public:
                     bool showUpdateButton=false;
                     for(int j=0;j<data->channels.load(std::memory_order_relaxed);j++)
                     {
-                        showUpdateButton=showUpdateButton||isSpectrumChanged[j]||isWaveformChanged[j];
+                        showUpdateButton=(showUpdateButton||isSpectrumChanged[j]||isWaveformChanged[j]);
                     }
 
                     if(showUpdateButton)
@@ -871,10 +902,9 @@ public:
         length=data->length.load(std::memory_order_relaxed);
 
 
-        if(ImGui::Checkbox("Mono", &isMono)){
-            if(isMono)data->channels.store(1, std::memory_order_relaxed);
-            else data->channels.store(2, std::memory_order_relaxed);
-        }
+        displaySpeakerConnections();
+        SpeakerConnections connections=module->speakerConnections.load(std::memory_order_relaxed);
+        bool isMono=(connections==speakerLL||connections==speakerRR);
         ImGui::SameLine();
 
 
@@ -906,7 +936,7 @@ public:
         {
             for(int channel=0;channel<1||!isMono&&channel<2;channel++){
                 ImGui::TableNextColumn();
-
+                if(connections==speakerRR)channel=1;
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
                 if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L", plotSize)){
                     setInputMap();
