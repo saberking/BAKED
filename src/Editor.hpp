@@ -31,6 +31,7 @@ START_NAMESPACE_DISTRHO
 #define PLAYSTART_ICON "\x40"
 #define ERASER_ICON "\x41"
 #define ZERO_ICON   "\x42"
+#define REDO_ICON   "\x43"
 
 #define MAX_UNDO_DEPTH 12
 struct PlotAudioContext {
@@ -56,7 +57,7 @@ public:
         std::vector<std::atomic<float>>*atomicDataPtr;
         bool isAtomic=false;
         bool shouldContinue;
-        bool isLast=false;
+        bool isHead=true;
         UndoItem(std::vector<float> *_data, bool _shouldContinue=false)
         {
             data.reserve(MAX_SAMPLE_LENGTH);
@@ -787,25 +788,59 @@ public:
 
 
     }
+    UndoItem *copyUndoItem(UndoItem *item)
+    {
+        UndoItem *tempRedoPtr;
+        if(item->isAtomic)
+            tempRedoPtr=new UndoItem(item->atomicDataPtr);
+        else  tempRedoPtr=new UndoItem(item->dataPtr);
+        tempRedoPtr->isHead=item->isHead;
+        tempRedoPtr->shouldContinue=item->shouldContinue;
+        return tempRedoPtr;
+    }
     void undo()
     {std::cout<<"undo "<<nextUndoIndex<<std::endl;
-        nextUndoIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
+        int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
+        nextUndoIndex=currentIndex;
         bool shouldContinue=undoItems[nextUndoIndex]->shouldContinue;
+        UndoItem *tempRedoPtr=copyUndoItem(undoItems[nextUndoIndex]);
+
         undoItems[nextUndoIndex]->apply();
 
         delete(undoItems[nextUndoIndex]);
-        undoItems[nextUndoIndex]=NULL;
+        undoItems[nextUndoIndex]=tempRedoPtr;
         for(int i=0;i<2;i++)
         {
             calculateFFT(i);
         }
         module->process();
         if(shouldContinue) undo();
+        std::cout<<"finished undoing"<<nextUndoIndex<<std::endl;
+    }
+    void redo()
+    {std::cout<<"redo"<<nextUndoIndex<<std::endl;
+        int nextIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
+        bool shouldContinue=(undoItems[nextIndex]&&undoItems[nextIndex]->shouldContinue);
+        UndoItem *tempRedoPtr=copyUndoItem(undoItems[nextUndoIndex]);
+
+
+        undoItems[nextUndoIndex]->apply();
+        delete(undoItems[nextUndoIndex]);
+        undoItems[nextUndoIndex]=tempRedoPtr;
+        nextUndoIndex=nextIndex;
+        for(int i=0;i<2;i++)
+        {
+            calculateFFT(i);
+        }
+        module->process();
+        if(shouldContinue) redo();
     }
     template <typename T>
     void addUndoItem(std::vector<T>* data, bool shouldContinue = false)
     {
         std::cout<<"addundoitem "<<nextUndoIndex<<std::endl;
+        int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
+        if(undoItems[currentIndex])undoItems[currentIndex]->isHead=false;
         if(undoItems[nextUndoIndex]) delete(undoItems[nextUndoIndex]);
         undoItems[nextUndoIndex]=new UndoItem(data, shouldContinue);
         nextUndoIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
@@ -863,13 +898,22 @@ public:
             // if(ImGui::BeginChild("Toolbar", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY))
             // {
             ImGui::PushFont(iconFontLarge);
-            if(undoItems[(nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH]!=NULL)
+            int currentIndex=(nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH;
+            bool canUndo=(undoItems[currentIndex]!=NULL);
+            bool canRedo=(undoItems[nextUndoIndex]&&!(undoItems[currentIndex]&&undoItems[currentIndex]->isHead));
+            if(ImGui::Button(UNDO_ICON)&&canUndo)
             {
-                if(ImGui::Button(UNDO_ICON))
-                {
-                    undo();
-                }
+
+                undo();
             }
+            ImGui::SameLine();
+
+            if(ImGui::Button(REDO_ICON)&&canRedo)
+            {
+
+                redo();
+            }
+
             ImGui::PopFont();
             ImGui::SameLine();
             int selected=static_cast<int>(selectedButtonIndex);
