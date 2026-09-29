@@ -7,13 +7,15 @@ convolver length
 
 ---------
 
-Undo
+
 
 midinote&velocity
 interpolation
 
 normalise button
 stereo bleed button
+
+Undo
 
 zero tool
 playstart tool
