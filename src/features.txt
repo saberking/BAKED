@@ -20,9 +20,6 @@ Save everything properly
 midinote&velocity
 interpolation
 
-
-
-normalise button
 stereo blend button
 
 
