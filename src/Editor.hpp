@@ -804,8 +804,11 @@ public:
         undoCount=std::max(0,undoCount-1);
         std::cout<<"undo "<<nextUndoIndex<<std::endl;
         int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
+        int lastIndex=(currentIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
+
+        bool shouldContinue=(!(undoItems[lastIndex]&&undoItems[lastIndex]->isHead)&&undoItems[currentIndex]->shouldContinue);
         nextUndoIndex=currentIndex;
-        bool shouldContinue=undoItems[nextUndoIndex]->shouldContinue;
+
         UndoItem *tempRedoPtr=copyUndoItem(undoItems[nextUndoIndex]);
 
         undoItems[nextUndoIndex]->apply();
@@ -826,7 +829,7 @@ public:
 
         std::cout<<"redo"<<nextUndoIndex<<std::endl;
         int nextIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
-        bool shouldContinue=(undoItems[nextIndex]&&undoItems[nextIndex]->shouldContinue);
+        bool shouldContinue=(!undoItems[nextUndoIndex]->isHead&&undoItems[nextIndex]&&undoItems[nextIndex]->shouldContinue);
         UndoItem *tempRedoPtr=copyUndoItem(undoItems[nextUndoIndex]);
 
 
@@ -847,14 +850,23 @@ public:
         undoCount=std::min(MAX_UNDO_DEPTH-2,undoCount+1);
         std::cout<<"addundoitem "<<nextUndoIndex<<std::endl;
         int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
-        if(undoItems[currentIndex])undoItems[currentIndex]->isHead=false;
-        if(undoItems[nextUndoIndex]) delete(undoItems[nextUndoIndex]);
+        bool isHead=true;
+        if(undoItems[currentIndex])
+        {
+            if(undoItems[currentIndex]->isHead) undoItems[currentIndex]->isHead=false;
+            else isHead=false;
+        }
+        if(undoItems[nextUndoIndex])
+        {
+            if(undoItems[nextUndoIndex]->isHead)isHead=true;
+            delete(undoItems[nextUndoIndex]);
+        }
         undoItems[nextUndoIndex]=new UndoItem(data, shouldContinue);
+        undoItems[nextUndoIndex]->isHead=isHead;
         nextUndoIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
         if(undoItems[nextUndoIndex]&&undoItems[nextUndoIndex]->shouldContinue)
         {
-            delete(undoItems[nextUndoIndex]);
-            undoItems[nextUndoIndex]=NULL;
+            undoItems[nextUndoIndex]->shouldContinue=false;
         }
     }
     void displayButtonSelector(const char* const*labels,int length,int &selectedIndex, bool large=false)
