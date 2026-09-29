@@ -148,6 +148,7 @@ struct Module {
     bool *releaseEnabled=NULL;
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
     std::vector<std::atomic<float>> envelope;
+    bool isEnvelopeChanged=false;
     std::atomic<SpeakerConnections> speakerConnections=speakerLL;
 
     SamplePlaybackEngineMonophonic * playbackData[MAX_POLY];
@@ -211,6 +212,7 @@ struct Module {
             }
             processed->length.store(sample->length.load(std::memory_order_relaxed), std::memory_order_relaxed);
         }
+        isEnvelopeChanged=false;
     }
 
     void run(float outputs[2]){

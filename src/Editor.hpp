@@ -1008,7 +1008,7 @@ public:
             }
             if(!isLiveUpdate)
             {
-                bool showUpdateButton=false;
+                bool showUpdateButton=module->isEnvelopeChanged;
                 for(int j=0;j<data->channels.load(std::memory_order_relaxed);j++)
                 {
                     showUpdateButton=(showUpdateButton||isSpectrumChanged[j]||isWaveformChanged[j]);
@@ -1019,6 +1019,7 @@ public:
                     ImGui::SameLine();
                     if(ImGui::Button("Apply changes"))
                     {
+                        bool process=module->isEnvelopeChanged;
                         for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
                         {
 
@@ -1026,9 +1027,11 @@ public:
                             if(isWaveformChanged[j])
                             {
                                 calculateFFT(j);
-                                module->process();
+                                process=true;
                             }
+
                         }
+                        if(process)module->process();
                     }
                 }
             }
@@ -1149,6 +1152,7 @@ public:
                         (int)current_pos.x,current_pos.y,
                         [this](int x, float y, int dummy){
                             this->selectedButtonIndex==toolbarButtonsEraser?this->eraseEnvelope(x,y):this->setEnvelope(x,y);
+                            this->module->isEnvelopeChanged=true;
                         },
                         dataTypeEnvelope
                         );
