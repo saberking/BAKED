@@ -535,13 +535,13 @@ public:
     void setEnvelope(int x, float y)
     {
         if(x<0||x>=ENVELOPE_LENGTH) return;
-        module->envelope[x].store(std::max(0.f,std::min(1.f,y)), std::memory_order_relaxed);
+        module->envelope[x].store(std::max(-1.f,std::min(1.f,y)), std::memory_order_relaxed);
         setDirty();
     }
     void setConvolver(int x, float y)
     {
         if(x<0||x>=ENVELOPE_LENGTH) return;
-        (*convolver)[x]=std::max(0.f,std::min(1.f,y));
+        (*convolver)[x]=std::max(-1.f,std::min(1.f,y));
     }
     void erase(std::vector<float> &vec, int start, int end)
     {
@@ -1100,7 +1100,7 @@ public:
         setInputMap();
 
         ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
-        ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.18, ImPlotCond_Always);
+        ImPlot::SetupAxisLimits(ImAxis_Y1, -1.18, 1.18, ImPlotCond_Always);
         ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
         ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoGridLines|ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
@@ -1115,7 +1115,7 @@ public:
         bound_spec.LineWeight = 1.5f;
 
         // --- VERTICAL BOUNDS (From Y=0 to Y=1) ---
-        double v_line_y[] = { 0.0, 1.0 };
+        double v_line_y[] = { -1.0, 1.0 };
         double v_line_x0[] = { 0.0, 0.0 };
         double v_line_x200[] = { 200.0, 200.0 };
 
@@ -1128,7 +1128,7 @@ public:
 
         // --- HORIZONTAL BOUNDS (From X=0 to X=200) ---
         double h_line_x[] = { 0.0, 200.0 };
-        double h_line_y0[] = { 0.0, 0.0 };
+        double h_line_y0[] = { -1.0, -1.0 };
         double h_line_y1[] = { 1.0, 1.0 };
 
         // Bottom horizontal edge at Y=0
