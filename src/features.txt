@@ -16,7 +16,7 @@ stereo bleed button
 copy and paste tools
 stereo selector: LL, RR, LR, RL
 playback start pos tool
-
+Undo
 -----------------------------------
 ************************************
 -------------------------------------
@@ -49,7 +49,6 @@ stretcher (waveform resample by keeping partials and changing length)
 harmonise/noisify (copmress/expand partials)
 partial shift
 -----------------
-Undo?
 
 cossfade tool
 
