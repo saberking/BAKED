@@ -911,7 +911,7 @@ public:
         }
 
 
-        ImVec2 plotSize(-1,265);
+        ImVec2 plotSize(-1,260);
         if (ImGui::BeginTable("SampleTable", isMono?1:2, ImGuiTableFlags_SizingStretchSame))
         {
             for(int channel=0;channel<1||!isMono&&channel<2;channel++){
@@ -921,7 +921,7 @@ public:
                 if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L", plotSize)){
                     setInputMap(selectedButtonIndex);
 
-                    ImPlot::SetupAxis(ImAxis_Y1, "Pressure", ImPlotAxisFlags_Lock);
+                    ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
 
                     ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
@@ -963,98 +963,91 @@ public:
             ImGui::EndTable();
         }
 
-        if(ImGui::CollapsingHeader("Spectrum"))
+
+
+        if (ImGui::BeginTable("SpectrumTable", isMono?1:2, ImGuiTableFlags_SizingStretchSame))
         {
-            //ImGui::Indent();
-            if(ImGui::BeginChild("Spectrum", ImVec2(0,0), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY))
-            {
 
-                if (ImGui::BeginTable("SpectrumTable", isMono?1:2, ImGuiTableFlags_SizingStretchSame))
-                {
+            for(int channel=0;channel<1||!isMono&&channel<2;channel++){
+                ImGui::TableNextColumn();
 
-                    for(int channel=0;channel<1||!isMono&&channel<2;channel++){
-                        ImGui::TableNextColumn();
+                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
 
-                        ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+                if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L",plotSize)){
+                    setInputMap(selectedButtonIndex);
+                    ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
+                    ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
+                    ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
-                        if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L",plotSize)){
-                            setInputMap(selectedButtonIndex);
-                            ImPlot::SetupAxis(ImAxis_Y1, "Amplitude", ImPlotAxisFlags_Lock);
-                            ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
-                            ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
+                    ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
 
-                            ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
-                            ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
+                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
+                    ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
 
-                            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
-                            ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
+                    ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
+                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&selectedButtonIndex) {
+                        if(isWaveformChanged[channel])calculateFFT(channel);
+                        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                        //(*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
 
-                            ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
-                            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&selectedButtonIndex) {
-                                if(isWaveformChanged[channel])calculateFFT(channel);
-                                ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-                                //(*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
+                        handleDrag(
+                            (int)current_pos.x,current_pos.y,
+                            [this](int x, float y, int channel){this->setSpectrumAmplitude(x,y,channel);},
+                            channel
+                            );
 
-                                handleDrag(
-                                    (int)current_pos.x,current_pos.y,
-                                    [this](int x, float y, int channel){this->setSpectrumAmplitude(x,y,channel);},
-                                    channel
-                                    );
+                        // int newLength=std::max(
+                        //     data->length.load(std::memory_order_relaxed),
+                        //     std::max(0,std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x*2))
+                        //     );
 
-                                // int newLength=std::max(
-                                //     data->length.load(std::memory_order_relaxed),
-                                //     std::max(0,std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x*2))
-                                //     );
+                        // data->length.store(newLength, std::memory_order_relaxed);
 
-                                // data->length.store(newLength, std::memory_order_relaxed);
-
-                                if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
-                            }
-                            ImPlot::EndPlot();
-                        }
-
+                        if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
                     }
-
-                    for(int channel=0;channel<1||!isMono&&channel<2;channel++){
-                        ImGui::TableNextColumn();
-
-                        ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
-                        if (ImPlot::BeginPlot(channel?"Phase R":"Phase L", plotSize)){
-                            setInputMap(selectedButtonIndex);
-                            ImPlot::SetupAxis(ImAxis_Y1, "Phase", ImPlotAxisFlags_Lock);
-                            ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
-
-                            ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
-                            ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
-                            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
-                            ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
-
-                            ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
-                            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&selectedButtonIndex) {
-                                if(isWaveformChanged[channel])calculateFFT(channel);
-
-                                ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-
-                                handleDrag(
-                                    (int)current_pos.x,current_pos.y,
-                                    [this](int x, float y, int channel){this->setSpectrumPhase(x,y,channel);},
-                                    channel
-                                    );
-                                if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
-                            }
-                            ImPlot::EndPlot();
-                        }
-
-
-                    }
-
-                    ImGui::EndTable();
+                    ImPlot::EndPlot();
                 }
 
             }
-            ImGui::EndChild();
-            //ImGui::Unindent();
+
+            for(int channel=0;channel<1||!isMono&&channel<2;channel++){
+                ImGui::TableNextColumn();
+
+                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
+                if (ImPlot::BeginPlot(channel?"Phase R":"Phase L", plotSize)){
+                    setInputMap(selectedButtonIndex);
+                    ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
+                    ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
+
+                    ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
+                    ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
+                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
+                    ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
+
+                    ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
+                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&selectedButtonIndex) {
+                        if(isWaveformChanged[channel])calculateFFT(channel);
+
+                        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+
+                        handleDrag(
+                            (int)current_pos.x,current_pos.y,
+                            [this](int x, float y, int channel){this->setSpectrumPhase(x,y,channel);},
+                            channel
+                            );
+                        if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
+                    }
+                    ImPlot::EndPlot();
+                }
+
+
+            }
+
+            ImGui::EndTable();
         }
+
+
 
 
     }
@@ -1063,28 +1056,47 @@ public:
     {
         displayToolbar();
         ImGui::Separator();
-        if (ImGui::BeginChild("ScrollableRegion", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_None))
+        if(ImGui::BeginTable("Main Table", 2, ImGuiTableFlags_SizingStretchSame|ImGuiTableFlags_Resizable))
         {
-            float rigid_width = ImGui::GetContentRegionAvail().x;
+            ImGui::TableSetupColumn("Master Column", ImGuiTableColumnFlags_WidthStretch, 2.f);
+            ImGui::TableSetupColumn("Second Column", ImGuiTableColumnFlags_WidthStretch, 1.f);
 
-            if(!ImGui::GetCurrentWindow()->ScrollbarY)
-                rigid_width-= ImGui::GetStyle().ScrollbarSize;
-
-            if (ImGui::BeginChild("RigidContentBox", ImVec2(rigid_width, 0), ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar))
+            ImGui::TableNextColumn();
+            if (ImGui::BeginChild("LeftCol", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar))
             {
-
                 displaySample();
-                ImGui::Separator();
-                displayProcessing();
-                ImGui::Separator();
-                displayEnvelope();
-                ImGui::Separator();
-                displayPlaybackControls();
+
             }
+            // Save the height calculated by the first column this frame
+            float columnOneHeight = ImGui::GetWindowHeight();
             ImGui::EndChild();
 
+            ImGui::TableNextColumn();
+
+            if (ImGui::BeginChild("ScrollableRegion", ImVec2(0, columnOneHeight), ImGuiChildFlags_None, ImGuiWindowFlags_None))
+            {
+                float rigid_width = ImGui::GetContentRegionAvail().x;
+
+                if(!ImGui::GetCurrentWindow()->ScrollbarY)
+                    rigid_width-= ImGui::GetStyle().ScrollbarSize;
+
+                if (ImGui::BeginChild("RigidContentBox", ImVec2(rigid_width, 0), ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar))
+                {
+
+                    displayProcessing();
+                    ImGui::Separator();
+                    displayEnvelope();
+                    ImGui::Separator();
+                    displayPlaybackControls();
+                }
+                ImGui::EndChild();
+
+            }
+            ImGui::EndChild(); // End the scrollable region
+            ImGui::EndTable();
+
         }
-        ImGui::EndChild(); // End the scrollable region
+
     }
 
     // void onImGuiDisplay() override{

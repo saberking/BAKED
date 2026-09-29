@@ -1,38 +1,45 @@
-convolver length
+convolver length and minimum value
 convolve only partials or only phase or both
 midinote&velocity
-playback start pos
 interpolation
 
 ---------
 dice tool
 
-self convolve
-copy channel L->R or R->L
-stereo selector: LL, RR, LR, RL
+
 normalise button
 
 ---------
 eraser
-bake envelope, on off button
 
 stereo bleed button
 
-----------------------
+-------------
+
+self convolve
+copy channel L->R or R->L
+stereo selector: LL, RR, LR, RL
+fix reaper initial size
+-----------------------------------
+************************************
+-------------------------------------
+playback start pos
+
 export sample
--------------------------------------------
+
+HiDPI awareness
+resize UI
+save preset
+
+----------------------------------
+bake envelope, on off button
 
 load sample as partials or phase
 load sample as convolver
 load sample into "mixer"
 
 -----------
-
-save preset
------------------------------------
-************************************
--------------------------------------
-pitcher (partial multiply)
+pitcher (partial multiply or divide and round)
 stretcher (waveform resample)
 harmonise/noisify (copmress/expand partials)
 partial shift
@@ -53,10 +60,11 @@ Undo?
 --------------------------------------------
 *********************************************
 --------------------------------------------
+
+
 reverb
 LFO
 -----------------------------------------
 
 align plots by switchig from tsable to subplots
 
-fix reaper initial size
