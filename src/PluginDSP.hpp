@@ -12,7 +12,7 @@ START_NAMESPACE_DISTRHO
 class ImGuiPluginDSP : public Plugin
 {
     float fSpeed = 1.0f;
-    bool fReleaseEnabled=false;
+    bool releaseEnabled=false;
     bool consoleAttached=false;
 public:
 
@@ -31,7 +31,7 @@ public:
         }
         std::vector<float *>levels;
         levels.push_back(&fSpeed);
-        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &fReleaseEnabled));
+        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &releaseEnabled));
 
     }
     ~ImGuiPluginDSP(){
@@ -199,8 +199,6 @@ protected:
             break;
         case 0x90: // note_on
             noteOn(midi_data1, midi_data2);
-            break;
-        default:
             break;
         }
     }

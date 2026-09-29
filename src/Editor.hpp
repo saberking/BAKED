@@ -375,9 +375,9 @@ public:
         module->process();
     }
 
-    void setInputMap(bool editing){
+    void setInputMap(){
         ImPlotInputMap &inputMap=ImPlot::GetInputMap();
-        if (editing)
+        if (selectedButtonIndex)
         {
             inputMap.Pan = ImGuiMouseButton_Right;
 
@@ -691,69 +691,63 @@ public:
     }
     void displayPlaybackControls()
     {
-        // if (ImGui::BeginChild("Playback", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY)) {
-        //     ImGui::Text("Playback");
-
-
-            // 3. Set the slider width to stretch up to that text boundary
-            ImGui::SetNextItemWidth(-100.f);
-            if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
+        ImGui::SetNextItemWidth(-100.f);
+        if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
+        {
+            if (ImGui::IsItemActivated())
             {
-                if (ImGui::IsItemActivated())
-                {
-                        editParameter(kParamSpeed, true);
-                }
-                fSpeed=std::max(0.f,std::min(1.f,fSpeed));
-
-                setParameterValue(kParamSpeed, fSpeed);
-
+                    editParameter(kParamSpeed, true);
             }
-            const uint32_t activeFormat = getPluginFormat();
-            if (activeFormat == 1)
+            fSpeed=std::max(0.f,std::min(1.f,fSpeed));
+
+            setParameterValue(kParamSpeed, fSpeed);
+
+        }
+        const uint32_t activeFormat = getPluginFormat();
+        if (activeFormat == 1)
+        {
+            if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
             {
-                if(ImGui::IsItemHovered()&& ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-                {
-                    const clap_host_t* host=static_cast<const clap_host_t*>(dspPointer->host);
-                    HWND hwnd = reinterpret_cast<HWND>(parentWindow->getNativeWindowHandle());
+                const clap_host_t* host=static_cast<const clap_host_t*>(dspPointer->host);
+                HWND hwnd = reinterpret_cast<HWND>(parentWindow->getNativeWindowHandle());
 
-                    if(host){
-                        // Query DAW for the context menu extension
-                        auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
-                        std::cout<<"menuExt"<<std::endl;
-                        if (menuExt && menuExt->popup)
-                        {
-                            std::cout<<"pop"<<std::endl;
+                if(host){
+                    // Query DAW for the context menu extension
+                    auto* menuExt = (const clap_host_context_menu_t*)host->get_extension(host, CLAP_EXT_CONTEXT_MENU);
+                    std::cout<<"menuExt"<<std::endl;
+                    if (menuExt && menuExt->popup)
+                    {
+                        std::cout<<"pop"<<std::endl;
 
 
-                            ImVec2 mousePos = ImGui::GetMousePos();
+                        ImVec2 mousePos = ImGui::GetMousePos();
 
-                            auto* payload = new AsyncMenuPayload();
-                            payload->host = host;
-                            int xOffset=0,yOffset=0;
-                            // if (isVisible())getEmbeddedSubwindowOffset(xOffset,yOffset);
-                            payload->screenX = mousePos.x+xOffset;
-                            payload->screenY = mousePos.y+yOffset;
+                        auto* payload = new AsyncMenuPayload();
+                        payload->host = host;
+                        // int xOffset=0,yOffset=0;
+                        // if (isVisible())getEmbeddedSubwindowOffset(xOffset,yOffset);
+                        // payload->screenX = mousePos.x+xOffset;
+                        // payload->screenY = mousePos.y+yOffset;
 
-                            ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
-                        }
+                        ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
                     }
-                    ImGuiIO& io = ImGui::GetIO();
-                    io.MouseClicked[ImGuiMouseButton_Right] = false;
-                    io.MouseDown[ImGuiMouseButton_Right] = false;
-
                 }
+                ImGuiIO& io = ImGui::GetIO();
+                io.MouseClicked[ImGuiMouseButton_Right] = false;
+                io.MouseDown[ImGuiMouseButton_Right] = false;
+
             }
-            if (ImGui::IsItemDeactivated())
-            {
-                editParameter(kParamSpeed, false);
-            }
-        // }
-        // ImGui::EndChild();
+        }
+        if (ImGui::IsItemDeactivated())
+        {
+            editParameter(kParamSpeed, false);
+        }
+
     }
 
     void configureSmallGraph()
     {
-        setInputMap(true);
+        setInputMap();
 
         ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
         ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.18, ImPlotCond_Always);
@@ -799,7 +793,7 @@ public:
         if(ImPlot::BeginPlot("Envelope",ImVec2(-1.0f, 200.0f))){
             configureSmallGraph();
             ImPlot::PlotScatterG("Envelope", envelopeGetter, &dspPointer->modules[0]->envelope, ENVELOPE_LENGTH, spec);
-            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)&&selectedButtonIndex) {
                 ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
                 handleDrag(
@@ -819,37 +813,33 @@ public:
 
     void displayConvolver()
     {
-        // if (ImGui::BeginChild("Convolver", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY)) {
 
-            ImPlot::SetCurrentContext(imPlotContext[6]);
-            if(ImPlot::BeginPlot("Convolver##convolverplot",ImVec2(-1.0f, 200.0f))){
-                configureSmallGraph();
-                std::vector<float> xValues;
-                for(int i=0;i<ENVELOPE_LENGTH;i++)
-                {
-                    xValues.push_back(i);
-                }
-                ImPlot::PlotScatter("Convolver", xValues.data(), (*convolver).data(), ENVELOPE_LENGTH, spec);
-                if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                    ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-
-                    handleDrag(
-                        (int)current_pos.x,current_pos.y,
-                        [this](int x, float y, int dummy){this->setConvolver(x,y);}
-                        );
-
-
-                }
-                ImPlot::EndPlot();
-
-            }
-            if(ImGui::Button("Convolve"))
+        ImPlot::SetCurrentContext(imPlotContext[6]);
+        if(ImPlot::BeginPlot("Convolver##convolverplot",ImVec2(-1.0f, 200.0f))){
+            configureSmallGraph();
+            std::vector<float> xValues;
+            for(int i=0;i<ENVELOPE_LENGTH;i++)
             {
-                convolve();
+                xValues.push_back(i);
             }
+            ImPlot::PlotScatter("Convolver", xValues.data(), (*convolver).data(), ENVELOPE_LENGTH, spec);
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)&&selectedButtonIndex) {
+                ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
-        // }
-        // ImGui::EndChild();
+                handleDrag(
+                    (int)current_pos.x,current_pos.y,
+                    [this](int x, float y, int dummy){this->setConvolver(x,y);}
+                    );
+
+
+            }
+            ImPlot::EndPlot();
+
+        }
+        if(ImGui::Button("Convolve"))
+        {
+            convolve();
+        }
 
     }
 
@@ -919,7 +909,7 @@ public:
 
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
                 if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L", plotSize)){
-                    setInputMap(selectedButtonIndex);
+                    setInputMap();
 
                     ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
@@ -963,7 +953,7 @@ public:
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
 
                 if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L",plotSize)){
-                    setInputMap(selectedButtonIndex);
+                    setInputMap();
                     ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
                     ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
@@ -1002,7 +992,7 @@ public:
 
                 ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
                 if (ImPlot::BeginPlot(channel?"Phase R":"Phase L", plotSize)){
-                    setInputMap(selectedButtonIndex);
+                    setInputMap();
                     ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
 

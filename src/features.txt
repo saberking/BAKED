@@ -2,8 +2,6 @@ eraser tool
 
 zero tool
 
-convolver and envelope respect tool
-
 make convolver min -1
 save convolver when ui closed
 convolver length

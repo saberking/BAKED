@@ -88,7 +88,7 @@ public:
     }
 
     void setDirty(){
-
+        //only works in bitwig
         const uint32_t activeFormat = editor->getPluginFormat();
 
         if (activeFormat == 1)
