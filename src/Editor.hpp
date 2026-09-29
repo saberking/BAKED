@@ -31,6 +31,8 @@ START_NAMESPACE_DISTRHO
 #define PLAYSTART_ICON "\x40"
 #define ERASER_ICON "\x41"
 #define ZERO_ICON   "\x42"
+
+#define MAX_UNDO_DEPTH 12
 struct PlotAudioContext {
     AudioData* audioData;
     int channel;
@@ -47,6 +49,47 @@ struct AsyncMenuPayload {//for right click autmoaiton clip
 class SampleEditor //: public DGL::ImGuiStandaloneWindow, public FileDropReceiver
 {
 public:
+    struct UndoItem
+    {
+        std::vector<float> data;
+        std::vector<float> *dataPtr;
+        std::vector<std::atomic<float>>*atomicDataPtr;
+        bool isAtomic=false;
+        bool shouldContinue;
+        bool isLast=false;
+        UndoItem(std::vector<float> *_data, bool _shouldContinue=false)
+        {
+            data.reserve(MAX_SAMPLE_LENGTH);
+            data=*_data;
+            dataPtr=_data;
+            shouldContinue=_shouldContinue;
+        }
+        UndoItem(std::vector<std::atomic<float>> *_data, bool _shouldContinue=false)
+        {
+            data.reserve(MAX_SAMPLE_LENGTH);
+            for(int i=0;i<_data->size();i++)
+                data.push_back((*_data)[i].load(std::memory_order_relaxed));
+            atomicDataPtr=_data;
+            isAtomic=true;
+            shouldContinue=_shouldContinue;
+        }
+        void apply()
+        {
+            if(isAtomic)
+            {
+                for(int i=0;i<data.size();i++)
+                {
+                    (*atomicDataPtr)[i].store(data[i],std::memory_order_relaxed);
+                }
+
+            }else{
+                *dataPtr=data;
+            }
+
+        }
+    };
+    UndoItem *undoItems[MAX_UNDO_DEPTH];
+    int nextUndoIndex=0;
     AudioData *data=NULL;
     Module *module=NULL;
     ImPlotSpec spec;
@@ -84,6 +127,17 @@ public:
     ToolbarButtons selectedButtonIndex=toolbarButtonsCount;
     static constexpr const char* toolbarIcons[6] = { HAND_ICON, PENCIL_ICON, LINE_ICON, ERASER_ICON,COPY_ICON,PASTE_ICON };
 
+    enum DataType{
+        dataTypeEnvelope,
+        dataTypeConvolver,
+        dataTypeWaveL,
+        dataTypeWaveR,
+        dataTypeSpectrumL,
+        dataTypeSpectrumR,
+        dataTypePhaseL,
+        dataTypePhaseR
+    };
+    DataType dragDataType;
     ImFont *iconFontLarge,*iconFontRegular;
 
 
@@ -150,6 +204,16 @@ public:
             ::SetWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this), 0);
         }
 
+        for(int i=0;i<MAX_UNDO_DEPTH;i++)
+        {
+            undoItems[i]=NULL;
+        }
+
+        setupFonts();
+    }
+
+    void setupFonts()
+    {
         ImGuiIO& io = ImGui::GetIO();
 
         // 1. Load default font first (Assigns to slot 0)
@@ -177,7 +241,6 @@ public:
 
         io.Fonts->Build();
     }
-
     static LRESULT CALLBACK SubclassMenuProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
                                              UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
     {
@@ -538,13 +601,14 @@ public:
 
         erase(*convolver, start, end);
     }
-    void startDrag(int x, float y, std::function<void(int, float, int)> callback, int channel)
+    void startDrag(int x, float y, std::function<void(int, float, int)> callback, int channel, DataType type)
     {
         isDragging=true;
         dragStartX=x;
         dragStartY=y;
         dragCallback=callback;
         dragChannel=channel;
+        dragDataType=type;
     }
     void endDrag()
     {
@@ -552,9 +616,12 @@ public:
         {
             if(selectedButtonIndex==toolbarButtonsLine)
             {
+
                 drawLine(dragEndX,dragEndY);
                 if(isLiveUpdate)
                 {
+                    if(dragDataType==dataTypeSpectrumL||dragDataType==dataTypePhaseL) addUndoItem(&(module->sample->sampleData[0]));
+                    if(dragDataType==dataTypeSpectrumR||dragDataType==dataTypePhaseR) addUndoItem(&(module->sample->sampleData[1]));
                     for(int i=0;i<2;i++)
                     {
                         if(isSpectrumChanged[i])
@@ -582,6 +649,18 @@ public:
     }
     void drawLine(int x, float y)
     {
+        if(selectedButtonIndex==toolbarButtonsLine)
+        {
+            if(dragDataType==dataTypeWaveL)
+                addUndoItem(&(module->sample->sampleData[0]));
+            if(dragDataType==dataTypeWaveR)
+                addUndoItem(&(module->sample->sampleData[1]));
+            if(dragDataType==dataTypeEnvelope)
+                addUndoItem(&(module->envelope));
+            if(dragDataType==dataTypeConvolver)
+                addUndoItem(convolver);
+        }
+
         int xStep = x>dragStartX?1:-1;
         int noOfSteps=std::abs(x-dragStartX)+1;
         float yStep =(y-dragStartY)/noOfSteps;
@@ -594,7 +673,7 @@ public:
     {
         dragEndX=x;dragEndY=y;
     }
-    void handleDrag(int x, float y, std::function<void(int, float, int)> callback, int channel=0)
+    void handleDrag(int x, float y, std::function<void(int, float, int)> callback, DataType type, int channel=0)
     {
         if(selectedButtonIndex==toolbarButtonsPencil)
         {
@@ -603,10 +682,10 @@ public:
             }else{
                 callback(x, y, channel);
             }
-            startDrag(x,y, callback, channel);
+            startDrag(x,y, callback, channel, type );
         }else if(selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser){
             if(!isDragging)
-                startDrag(x,y, callback, channel);
+                startDrag(x,y, callback, channel, type);
         }
         updateDragEnd(x,y);
     }
@@ -633,6 +712,7 @@ public:
     {
         for (int j=0;j<2;j++)
         {
+            addUndoItem(&(module->sample->sampleData[j]),j==1);
             for (int i=0;i<module->sample->length.load(std::memory_order_relaxed);i++)
             {
                 float sample=module->sample->sampleData[j][i].load(std::memory_order_relaxed);
@@ -666,18 +746,20 @@ public:
                 exponential*=multiplier;
                 (*spectrum[j])[i]=(*spectrum[j])[i]*exponential;
             }
-            isSpectrumChanged[j]=true;
-            if(isLiveUpdate)
-            {
-                calculateWaveform(j);
-            }
+            addUndoItem(&(module->sample->sampleData[j]));
+
+            calculateWaveform(j);
         }
+        undoItems[(nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH]->shouldContinue=true;
     }
     void convolve ()
     {
         for(int j=0;j<2;j++)
         {
+            addUndoItem(&(module->sample->sampleData[j]),j==1);
+
             if(isSpectrumChanged[j]){
+
                 calculateWaveform(j);
             }
         }
@@ -705,8 +787,34 @@ public:
 
 
     }
+    void undo()
+    {std::cout<<"undo "<<nextUndoIndex<<std::endl;
+        nextUndoIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
+        bool shouldContinue=undoItems[nextUndoIndex]->shouldContinue;
+        undoItems[nextUndoIndex]->apply();
 
-
+        delete(undoItems[nextUndoIndex]);
+        undoItems[nextUndoIndex]=NULL;
+        for(int i=0;i<2;i++)
+        {
+            calculateFFT(i);
+        }
+        module->process();
+        if(shouldContinue) undo();
+    }
+    template <typename T>
+    void addUndoItem(std::vector<T>* data, bool shouldContinue = false)
+    {
+        std::cout<<"addundoitem "<<nextUndoIndex<<std::endl;
+        if(undoItems[nextUndoIndex]) delete(undoItems[nextUndoIndex]);
+        undoItems[nextUndoIndex]=new UndoItem(data, shouldContinue);
+        nextUndoIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
+        if(undoItems[nextUndoIndex]&&undoItems[nextUndoIndex]->shouldContinue)
+        {
+            delete(undoItems[nextUndoIndex]);
+            undoItems[nextUndoIndex]=NULL;
+        }
+    }
     void displayButtonSelector(const char* const*labels,int length,int &selectedIndex, bool large=false)
     {
         if(large)ImGui::PushFont(iconFontLarge);
@@ -746,15 +854,24 @@ public:
     {
         if (ImGui::BeginTable("Toolbar Table", 3, ImGuiTableFlags_SizingStretchSame| ImGuiTableFlags_SizingFixedFit)){
             ImGui::TableSetupColumn("Left Empty", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Much Longer Header", ImGuiTableColumnFlags_WidthFixed, 0.0f);
-            ImGui::TableSetupColumn("Stretchy Column", ImGuiTableColumnFlags_WidthStretch); // (Optional mixed layout)
+            ImGui::TableSetupColumn("Toolbar Column", ImGuiTableColumnFlags_WidthFixed, 0.0f);
+            ImGui::TableSetupColumn("Right Empty", ImGuiTableColumnFlags_WidthStretch); // (Optional mixed layout)
 
             ImGui::TableNextColumn();ImGui::TableNextColumn();
 
 
             // if(ImGui::BeginChild("Toolbar", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY))
             // {
-
+            ImGui::PushFont(iconFontLarge);
+            if(undoItems[(nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH]!=NULL)
+            {
+                if(ImGui::Button(UNDO_ICON))
+                {
+                    undo();
+                }
+            }
+            ImGui::PopFont();
+            ImGui::SameLine();
             int selected=static_cast<int>(selectedButtonIndex);
             displayButtonSelector(toolbarIcons,toolbarButtonsCount,selected, true);
             selectedButtonIndex=static_cast<ToolbarButtons>(selected);
@@ -915,7 +1032,8 @@ public:
                         (int)current_pos.x,current_pos.y,
                         [this](int x, float y, int dummy){
                             this->selectedButtonIndex==toolbarButtonsEraser?this->eraseEnvelope(x,y):this->setEnvelope(x,y);
-                        }
+                        },
+                        dataTypeEnvelope
                         );
                     // if (isLiveUpdate)
                     // {
@@ -950,7 +1068,8 @@ public:
                         (int)current_pos.x,current_pos.y,
                         [this](int x, float y, int dummy){
                             this->selectedButtonIndex==toolbarButtonsEraser?this->eraseConvolver(x,y):this->setConvolver(x,y);
-                        }
+                        },
+                        dataTypeConvolver
                         );
 
                 }
@@ -1048,7 +1167,12 @@ public:
                     {
                         if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
                         {
-                            if(isSpectrumChanged[channel])calculateWaveform(channel);
+                            if(isSpectrumChanged[channel])
+                            {
+                                addUndoItem(&(module->sample->sampleData[channel]));
+
+                                calculateWaveform(channel);
+                            }
                             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
                             handleDrag(
@@ -1056,6 +1180,7 @@ public:
                                 [this]( int x, float y, int channel){
                                     this->selectedButtonIndex==toolbarButtonsEraser?this->eraseWaveform(x,y, channel):this->setWaveformSample(x,y,channel);
                                 },
+                                channel?dataTypeWaveR:dataTypeWaveL,
                                 channel
                                 );
                             int newLength=std::max(
@@ -1105,6 +1230,7 @@ public:
                                 [this](int x, float y, int channel){
                                     this->setSpectrumAmplitude(x,y,channel);
                                 },
+                                channel?dataTypeSpectrumR:dataTypeSpectrumL,
                                 channel
                                 );
 
@@ -1115,7 +1241,11 @@ public:
 
                             // data->length.store(newLength, std::memory_order_relaxed);
 
-                            if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
+                            if(isLiveUpdate&&isSpectrumChanged[channel])
+                            {
+
+                                calculateWaveform(channel);
+                            }
 
                         }
                     }
@@ -1149,10 +1279,14 @@ public:
                                 [this](int x, float y, int channel){
                                     this->setSpectrumPhase(x,y,channel);
                                 },
+                                channel?dataTypePhaseR:dataTypePhaseL,
                                 channel
                                 );
-                            if(isLiveUpdate&&isSpectrumChanged[channel])calculateWaveform(channel);
+                            if(isLiveUpdate&&isSpectrumChanged[channel])
+                            {
 
+                                calculateWaveform(channel);
+                            }
                         }
                     }
                     ImPlot::EndPlot();
@@ -1249,6 +1383,10 @@ public:
         delete convolver;
         HWND hwnd = (HWND)parentWindow->getNativeWindowHandle();
         ::RemoveWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this));
+        for(int i=0;i<MAX_UNDO_DEPTH;i++)
+        {
+            if(undoItems[i])delete undoItems[i];
+        }
 
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleEditor)
