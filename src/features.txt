@@ -1,13 +1,16 @@
+
 copy and paste tools
+Undo tool
+zero tool
+playstart tool
+
+
+--------------------------
+
 
 make convolver min -1
-save convolver when ui closed
+save convolver and undo history when ui closed
 convolver length
-
-
----------
-
-
 
 midinote&velocity
 interpolation
@@ -15,10 +18,7 @@ interpolation
 normalise button
 stereo bleed button
 
-Undo
 
-zero tool
-playstart tool
 
 -----------------------------------
 ************************************
