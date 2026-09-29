@@ -1,24 +1,26 @@
 
-zero tool
 
--------------------------
 make convolver and envelope min -1
 make envelope length sample length
 convolver length
 
 copy and paste tools
+zero tool
 
 
-Save everything properly
 
 
 playstart tool
 
 save convolver and undo history when ui closed
------------------------------------
+
+Save everything properly
+
 
 midinote&velocity
 interpolation
+
+
 
 normalise button
 stereo blend button

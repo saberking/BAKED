@@ -91,7 +91,7 @@ public:
     };
     UndoItem *undoItems[MAX_UNDO_DEPTH];
     int nextUndoIndex=0;
-    int undoCount=0;
+    int undoCount=0,redoCount=0;
     AudioData *data=NULL;
     Module *module=NULL;
     ImPlotSpec spec;
@@ -606,7 +606,7 @@ public:
     }
     void startDrag(int x, float y, std::function<void(int, float, int)> callback, int channel, DataType type)
     {
-        std::cout<<"starting drag"<<std::endl;
+        std::cout<<"starting drag"<<isDragSavedForUndo<<std::endl;
         isDragging=true;
         dragStartX=x;
         dragStartY=y;
@@ -616,7 +616,8 @@ public:
         if(!isDragSavedForUndo)
         {
             isDragSavedForUndo=true;
-            addDragUndoItem();
+            std::cout<<"Adding drag undo in startdraf"<<std::endl;
+            addDragUndoItem(type);
         }
     }
     void endDrag()
@@ -656,15 +657,15 @@ public:
 
         }
     }
-    void addDragUndoItem()
+    void addDragUndoItem(DataType type)
     {
-        if(dragDataType==dataTypeWaveL)
+        if(type==dataTypeWaveL)
             addUndoItem(&(module->sample->sampleData[0]));
-        if(dragDataType==dataTypeWaveR)
+        if(type==dataTypeWaveR)
             addUndoItem(&(module->sample->sampleData[1]));
-        if(dragDataType==dataTypeEnvelope)
+        if(type==dataTypeEnvelope)
             addUndoItem(&(module->envelope));
-        if(dragDataType==dataTypeConvolver)
+        if(type==dataTypeConvolver)
             addUndoItem(convolver);
         addLiveUpdateUndoItem();
     }
@@ -693,12 +694,21 @@ public:
     {
         if(selectedButtonIndex==toolbarButtonsPencil)
         {
+            if(!isDragSavedForUndo)
+            {
+                std::cout<<"Adding drag undo in handldrag"<<std::endl;
+
+                isDragSavedForUndo=true;
+                addDragUndoItem(type);
+            }
+
             if(isDragging){
                 drawLine(x,y);
             }else{
                 callback(x, y, channel);
             }
             startDrag(x,y, callback, channel, type );
+
         }else if(selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser){
             if(!isDragging)
                 startDrag(x,y, callback, channel, type);
@@ -762,11 +772,27 @@ public:
                 exponential*=multiplier;
                 (*spectrum[j])[i]=(*spectrum[j])[i]*exponential;
             }
-            addUndoItem(&(module->sample->sampleData[j]));
+            addUndoItem(&(module->sample->sampleData[j]),j==1);
 
             calculateWaveform(j);
         }
-        undoItems[(nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH]->shouldContinue=true;
+    }
+    void normalise()
+    {
+        for(int j=0;j<2;j++)
+        {
+            addUndoItem(&(module->sample->sampleData[j]),j==1);
+
+            float max=0.000001f;
+            for(int i=0;i<module->sample->length.load(std::memory_order_relaxed);i++)
+                max=std::max(max,std::abs(module->sample->sampleData[j][i].load(std::memory_order_relaxed)));
+            float recip=1/max;
+            for(int i=0;i<module->sample->length.load(std::memory_order_relaxed);i++)
+                module->sample->sampleData[j][i].store(module->sample->sampleData[j][i].load(std::memory_order_relaxed)*recip);
+            isWaveformChanged[j]=true;
+            if(isLiveUpdate) calculateFFT(j);
+        }
+
     }
     void convolve ()
     {
@@ -816,6 +842,8 @@ public:
     void undo()
     {
         undoCount=std::max(0,undoCount-1);
+        redoCount=std::min(MAX_UNDO_DEPTH-2,redoCount+1);
+
         std::cout<<"undo "<<nextUndoIndex<<std::endl;
         int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
         int lastIndex=(currentIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
@@ -840,6 +868,7 @@ public:
     void redo()
     {
         undoCount=std::min(MAX_UNDO_DEPTH-2,undoCount+1);
+        redoCount=std::max(0,redoCount-1);
 
         std::cout<<"redo"<<nextUndoIndex<<std::endl;
         int nextIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
@@ -862,6 +891,7 @@ public:
     void addUndoItem(std::vector<T>* data, bool shouldContinue = false)
     {
         undoCount=std::min(MAX_UNDO_DEPTH-2,undoCount+1);
+        redoCount=std::max(0,redoCount-1);
         std::cout<<"addundoitem "<<nextUndoIndex<<std::endl;
         int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
         bool isHead=true;
@@ -872,6 +902,7 @@ public:
         }
         if(undoItems[nextUndoIndex])
         {
+            isHead=undoItems[nextUndoIndex]->isHead;
             if(undoItems[nextUndoIndex]->isHead)isHead=true;
             delete(undoItems[nextUndoIndex]);
         }
@@ -932,8 +963,10 @@ public:
             // {
             ImGui::PushFont(iconFontLarge);
             int currentIndex=(nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH;
-            int lastIndex=(currentIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH;
-            bool canRedo=(undoItems[nextUndoIndex]&&!(undoItems[currentIndex]&&undoItems[currentIndex]->isHead));
+            bool redoDataAvailable=(undoItems[nextUndoIndex]!=NULL);
+            bool isHead=(undoItems[currentIndex]&&undoItems[currentIndex]->isHead);
+            //bool canRedo=(redoDataAvailable&&!isHead);
+            bool canRedo=(bool)redoCount;
             bool canUndo=(undoItems[currentIndex]&&undoCount);
             ImGui::BeginDisabled(!canUndo);
             if(ImGui::Button(UNDO_ICON)&&canUndo)
@@ -1168,24 +1201,31 @@ public:
 
     }
 
+
+
     void displayProcessing()
     {
-        // if (ImGui::BeginChild("Processing", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY)) {
-        //     ImGui::Text("Processing");
-            displayConvolver();
-        ImGui::Separator();
-            if(ImGui::Button("Compress"))
-            {
-                compress();
-            }
-            ImGui::Separator();
 
-            if(ImGui::Button("Filter"))
-            {
-                filter();
-            }
-        // }
-        // ImGui::EndChild();
+        displayConvolver();
+        ImGui::Separator();
+        if(ImGui::Button("Compress"))
+        {
+            compress();
+        }
+        ImGui::Separator();
+
+        if(ImGui::Button("Filter"))
+        {
+            filter();
+        }
+        ImGui::Separator();
+        if(ImGui::Button("Normalise"))
+        {
+            normalise();
+        }
+
+
+
     }
 
 
