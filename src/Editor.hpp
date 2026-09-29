@@ -91,6 +91,7 @@ public:
     };
     UndoItem *undoItems[MAX_UNDO_DEPTH];
     int nextUndoIndex=0;
+    int undoCount=0;
     AudioData *data=NULL;
     Module *module=NULL;
     ImPlotSpec spec;
@@ -799,7 +800,9 @@ public:
         return tempRedoPtr;
     }
     void undo()
-    {std::cout<<"undo "<<nextUndoIndex<<std::endl;
+    {
+        undoCount=std::max(0,undoCount-1);
+        std::cout<<"undo "<<nextUndoIndex<<std::endl;
         int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
         nextUndoIndex=currentIndex;
         bool shouldContinue=undoItems[nextUndoIndex]->shouldContinue;
@@ -818,7 +821,10 @@ public:
         std::cout<<"finished undoing"<<nextUndoIndex<<std::endl;
     }
     void redo()
-    {std::cout<<"redo"<<nextUndoIndex<<std::endl;
+    {
+        undoCount=std::min(MAX_UNDO_DEPTH-2,undoCount+1);
+
+        std::cout<<"redo"<<nextUndoIndex<<std::endl;
         int nextIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
         bool shouldContinue=(undoItems[nextIndex]&&undoItems[nextIndex]->shouldContinue);
         UndoItem *tempRedoPtr=copyUndoItem(undoItems[nextUndoIndex]);
@@ -838,6 +844,7 @@ public:
     template <typename T>
     void addUndoItem(std::vector<T>* data, bool shouldContinue = false)
     {
+        undoCount=std::min(MAX_UNDO_DEPTH-2,undoCount+1);
         std::cout<<"addundoitem "<<nextUndoIndex<<std::endl;
         int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
         if(undoItems[currentIndex])undoItems[currentIndex]->isHead=false;
@@ -899,8 +906,10 @@ public:
             // {
             ImGui::PushFont(iconFontLarge);
             int currentIndex=(nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH;
-            bool canUndo=(undoItems[currentIndex]!=NULL);
+            int lastIndex=(currentIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH;
             bool canRedo=(undoItems[nextUndoIndex]&&!(undoItems[currentIndex]&&undoItems[currentIndex]->isHead));
+            bool canUndo=(undoItems[currentIndex]&&undoCount);
+
             if(ImGui::Button(UNDO_ICON)&&canUndo)
             {
 
@@ -1350,7 +1359,8 @@ public:
     void display()
     {
         displayToolbar();
-        float separator_width = ImGui::GetContentRegionAvail().x-ImGui::GetStyle().ScrollbarSize;
+        float separator_width = ImGui::GetContentRegionAvail().x;
+        //separator_width-=ImGui::GetStyle().ScrollbarSize;
         ImGui::BeginChild("ShortSeparator", ImVec2(separator_width, 2), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
         ImGui::Separator();
@@ -1377,8 +1387,8 @@ public:
             {
                 float rigid_width = ImGui::GetContentRegionAvail().x;
 
-                if(!ImGui::GetCurrentWindow()->ScrollbarY)
-                    rigid_width-= ImGui::GetStyle().ScrollbarSize;
+                // if(!ImGui::GetCurrentWindow()->ScrollbarY)
+                //     rigid_width-= ImGui::GetStyle().ScrollbarSize;
 
                 if (ImGui::BeginChild("RigidContentBox", ImVec2(rigid_width, 0), ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar))
                 {

@@ -1,6 +1,5 @@
 
 Undo tool
-redo tool
 zero tool
 
 -------------------------
@@ -10,14 +9,14 @@ convolver length
 
 copy and paste tools
 
-playstart tool
 
 Save everything properly
 
---------------------------
 
+playstart tool
 
 save convolver and undo history when ui closed
+-----------------------------------
 
 midinote&velocity
 interpolation
