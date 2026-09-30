@@ -1,4 +1,5 @@
 
+
 Save everything properly
 
 
@@ -6,19 +7,20 @@ copy and paste partials and phase
 
 paste strength, multiply mode
 
-dice tool
 
 -----------------------------
 
 midinote&velocity
 interpolation
 
-zero tool
 
 
 -----------------------------------
 ************************************
 -------------------------------------
+zero tool
+
+dice tool
 
 stereo blend button
 
@@ -63,9 +65,7 @@ plotG is slow maybe if it not in order
 
 
 show convolver partials/phase
-convolver only partials or only phase or both
-
-self convolve
+convolve only partials or only phase or both
 
 HiDPI awareness
 resize UI
