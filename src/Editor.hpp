@@ -57,7 +57,6 @@ public:
         std::vector<std::atomic<float>>*atomicDataPtr;
         bool isAtomic=false;
         bool shouldContinue;
-        bool isHead=true;
         UndoItem(std::vector<float> *_data, bool _shouldContinue=false)
         {
             data.reserve(MAX_SAMPLE_LENGTH);
@@ -606,7 +605,6 @@ public:
     }
     void startDrag(int x, float y, std::function<void(int, float, int)> callback, int channel, DataType type)
     {
-        std::cout<<"starting drag"<<isDragSavedForUndo<<std::endl;
         isDragging=true;
         dragStartX=x;
         dragStartY=y;
@@ -667,12 +665,12 @@ public:
             addUndoItem(&(module->envelope));
         if(type==dataTypeConvolver)
             addUndoItem(convolver);
-        addLiveUpdateUndoItem();
+        addLiveUpdateUndoItem(type);
     }
-    void addLiveUpdateUndoItem()
+    void addLiveUpdateUndoItem(DataType type)
     {
-        if(dragDataType==dataTypeSpectrumL||dragDataType==dataTypePhaseL) addUndoItem(&(module->sample->sampleData[0]));
-        if(dragDataType==dataTypeSpectrumR||dragDataType==dataTypePhaseR) addUndoItem(&(module->sample->sampleData[1]));
+        if(type==dataTypeSpectrumL||type==dataTypePhaseL) addUndoItem(&(module->sample->sampleData[0]));
+        if(type==dataTypeSpectrumR||type==dataTypePhaseR) addUndoItem(&(module->sample->sampleData[1]));
     }
     void drawLine(int x, float y)
     {
@@ -835,20 +833,29 @@ public:
         if(item->isAtomic)
             tempRedoPtr=new UndoItem(item->atomicDataPtr);
         else  tempRedoPtr=new UndoItem(item->dataPtr);
-        tempRedoPtr->isHead=item->isHead;
         tempRedoPtr->shouldContinue=item->shouldContinue;
         return tempRedoPtr;
+    }
+    DataType getUndoItemDataType(UndoItem *item)
+    {
+
+        if(item->dataPtr==convolver) return dataTypeConvolver;
+        if(item->atomicDataPtr==&(module->envelope)) return dataTypeEnvelope;
+
+        if(item->atomicDataPtr==&(module->sample->sampleData[0])) return dataTypeWaveL;
+        if(item->atomicDataPtr==&(module->sample->sampleData[1])) return dataTypeWaveR;
     }
     void undo()
     {
         undoCount=std::max(0,undoCount-1);
         redoCount=std::min(MAX_UNDO_DEPTH-2,redoCount+1);
 
-        std::cout<<"undo "<<nextUndoIndex<<std::endl;
         int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
+        std::cout<<"undo "<<currentIndex<<" type: "<<getUndoItemDataType(undoItems[currentIndex])<<std::endl;
+
         int lastIndex=(currentIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
 
-        bool shouldContinue=(!(undoItems[lastIndex]&&undoItems[lastIndex]->isHead)&&undoItems[currentIndex]->shouldContinue);
+        bool shouldContinue=(undoCount&&undoItems[currentIndex]->shouldContinue);
         nextUndoIndex=currentIndex;
 
         UndoItem *tempRedoPtr=copyUndoItem(undoItems[nextUndoIndex]);
@@ -872,7 +879,7 @@ public:
 
         std::cout<<"redo"<<nextUndoIndex<<std::endl;
         int nextIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
-        bool shouldContinue=(!undoItems[nextUndoIndex]->isHead&&undoItems[nextIndex]&&undoItems[nextIndex]->shouldContinue);
+        bool shouldContinue=(redoCount&&undoItems[nextIndex]->shouldContinue);
         UndoItem *tempRedoPtr=copyUndoItem(undoItems[nextUndoIndex]);
 
 
@@ -894,20 +901,12 @@ public:
         redoCount=std::max(0,redoCount-1);
         std::cout<<"addundoitem "<<nextUndoIndex<<std::endl;
         int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
-        bool isHead=true;
-        if(undoItems[currentIndex])
-        {
-            if(undoItems[currentIndex]->isHead) undoItems[currentIndex]->isHead=false;
-            else isHead=false;
-        }
+
         if(undoItems[nextUndoIndex])
         {
-            isHead=undoItems[nextUndoIndex]->isHead;
-            if(undoItems[nextUndoIndex]->isHead)isHead=true;
             delete(undoItems[nextUndoIndex]);
         }
         undoItems[nextUndoIndex]=new UndoItem(data, shouldContinue);
-        undoItems[nextUndoIndex]->isHead=isHead;
         nextUndoIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
         if(undoItems[nextUndoIndex]&&undoItems[nextUndoIndex]->shouldContinue)
         {
@@ -964,8 +963,6 @@ public:
             ImGui::PushFont(iconFontLarge);
             int currentIndex=(nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH;
             bool redoDataAvailable=(undoItems[nextUndoIndex]!=NULL);
-            bool isHead=(undoItems[currentIndex]&&undoItems[currentIndex]->isHead);
-            //bool canRedo=(redoDataAvailable&&!isHead);
             bool canRedo=(bool)redoCount;
             bool canUndo=(undoItems[currentIndex]&&undoCount);
             ImGui::BeginDisabled(!canUndo);
