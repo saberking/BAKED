@@ -621,7 +621,8 @@ public:
     void endDrag()
     {
         isDragSavedForUndo=false;
-        if(isDragging)
+        bool editButtonSelected=selectedButtonIndex==toolbarButtonsEraser||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsPencil;
+        if(isDragging&&editButtonSelected)
         {
             std::cout<<"ending dra "<<(int)selectedButtonIndex<<std::endl;
             if(selectedButtonIndex==toolbarButtonsLine)
@@ -642,13 +643,13 @@ public:
                         }
 
                     }
-                    module->process();
                 }
             }
             if(selectedButtonIndex==toolbarButtonsEraser)
             {
                 dragCallback(dragEndX,0.f, dragChannel);
             }
+            if(isLiveUpdate)module->process();
             isDragging=false;
 
 
