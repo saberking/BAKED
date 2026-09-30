@@ -1,7 +1,9 @@
 
 
 make envelope length sample length
-convolver length
+convolver length, save convolver in dsp
+save undo history in dsp
+
 
 copy and paste tools
 zero tool
@@ -11,7 +13,6 @@ zero tool
 
 playstart tool
 
-save convolver and undo history when ui closed
 
 
 
@@ -32,6 +33,7 @@ Save everything properly
 ****xaxis squared scale                              ****
 ****load sample as partials or phase                 ****
 ****load sample as convolver                         ****
+****load sample as envelope                          ****
 ****load sample into "mixer"                         ****
 
 -----------------------------------
