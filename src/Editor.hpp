@@ -15,6 +15,7 @@
 #include <commctrl.h> // For SetWindowSubclass API
 #include "PluginDSP.hpp"
 #include "fonts/font_data.h"
+#include "Undo.hpp"
 
 
 START_NAMESPACE_DISTRHO
@@ -33,7 +34,6 @@ START_NAMESPACE_DISTRHO
 #define ZERO_ICON   "\x42"
 #define REDO_ICON   "\x43"
 
-#define MAX_UNDO_DEPTH 12
 struct PlotAudioContext {
     AudioData* audioData;
     int channel;
@@ -50,53 +50,14 @@ struct AsyncMenuPayload {//for right click autmoaiton clip
 class SampleEditor //: public DGL::ImGuiStandaloneWindow, public FileDropReceiver
 {
 public:
-    struct UndoItem
-    {
-        std::vector<float> data;
-        std::vector<float> *dataPtr;
-        std::vector<std::atomic<float>>*atomicDataPtr;
-        bool isAtomic=false;
-        bool shouldContinue;
-        UndoItem(std::vector<float> *_data, bool _shouldContinue=false)
-        {
-            data.reserve(MAX_SAMPLE_LENGTH);
-            data=*_data;
-            dataPtr=_data;
-            shouldContinue=_shouldContinue;
-        }
-        UndoItem(std::vector<std::atomic<float>> *_data, bool _shouldContinue=false)
-        {
-            data.reserve(MAX_SAMPLE_LENGTH);
-            for(int i=0;i<_data->size();i++)
-                data.push_back((*_data)[i].load(std::memory_order_relaxed));
-            atomicDataPtr=_data;
-            isAtomic=true;
-            shouldContinue=_shouldContinue;
-        }
-        void apply()
-        {
-            if(isAtomic)
-            {
-                for(int i=0;i<data.size();i++)
-                {
-                    (*atomicDataPtr)[i].store(data[i],std::memory_order_relaxed);
-                }
 
-            }else{
-                *dataPtr=data;
-            }
-
-        }
-    };
-    UndoItem *undoItems[MAX_UNDO_DEPTH];
-    int nextUndoIndex=0;
-    int undoCount=0,redoCount=0;
+    UndoItem **undoItems;
     AudioData *data=NULL;
     Module *module=NULL;
     ImPlotSpec spec;
     ImPlotContext** imPlotContext;
     std::vector<std::complex<float>> *spectrum[2] ;
-    std::vector<float> *convolver;
+    std::vector<std::atomic<float>> *convolver;
 
     std::vector<std::complex<float>> *convolverSpectrum ;
     bool isSpectrumChanged[2];
@@ -113,7 +74,10 @@ public:
     int dragStartX, dragEndX;
     std::function<void(int,float,int)> dragCallback;
     int dragChannel;
-    double spectrumXMax, spectrumXMin, waveformXMax, waveformXMin;
+    double spectrumXMax=100;
+    double spectrumXMin=-2;
+    double waveformXMax=-4;
+    double waveformXMin=200;
     float fSpeed = 1.f;
     ImGuiPluginDSP *dspPointer;
     Window *parentWindow;
@@ -129,16 +93,7 @@ public:
     ToolbarButtons selectedButtonIndex=toolbarButtonsHand;
     static constexpr const char* toolbarIcons[6] = { HAND_ICON, PENCIL_ICON, LINE_ICON, ERASER_ICON,COPY_ICON,PASTE_ICON };
 
-    enum DataType{
-        dataTypeEnvelope,
-        dataTypeConvolver,
-        dataTypeWaveL,
-        dataTypeWaveR,
-        dataTypeSpectrumL,
-        dataTypeSpectrumR,
-        dataTypePhaseL,
-        dataTypePhaseR
-    };
+
     DataType dragDataType;
     ImFont *iconFontLarge,*iconFontRegular;
 
@@ -162,14 +117,11 @@ public:
         setParameterValue=_setParameterValue;
         dspPointer=_dSPPointer;
         spec.Flags = ImPlotFlags_CanvasOnly;
+        convolver=dspPointer->convolver;
         // setResizable(true);
         // setSize(1675,1000);
 
-        convolver=new std::vector<float>(MAX_SAMPLE_LENGTH);
-        for(int i=0;i<MAX_SAMPLE_LENGTH;i++)
-        {
-            (*convolver)[i]=0.f;
-        }
+
 
         for(int channel=0;channel<2;channel++)
         {
@@ -191,10 +143,11 @@ public:
         {
             calculateFFT(channel);
         }
-        spectrumXMax=100;
-        spectrumXMin=-2;
-        waveformXMax=-4;
-        waveformXMin=200;
+
+        undoItems=dspPointer->undoItems;
+
+
+
 
         WM_TRIGGER_CLAP_MENU = ::RegisterWindowMessageA("MyUniquePlugin_ClapContextMenu_TriggerMsg");
         HWND hwnd = (HWND)parentWindow->getNativeWindowHandle();
@@ -206,10 +159,6 @@ public:
             ::SetWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this), 0);
         }
 
-        for(int i=0;i<MAX_UNDO_DEPTH;i++)
-        {
-            undoItems[i]=NULL;
-        }
 
         setupFonts();
     }
@@ -349,7 +298,11 @@ public:
         float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
         return ImPlotPoint(idx, y_val);
     }
-
+    static ImPlotPoint convolverGetter(int idx, void* data_ptr) {
+        auto* vec_ptr = static_cast<std::vector<std::atomic<float>>*>(data_ptr);
+        float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
+        return ImPlotPoint(idx, y_val);
+    }
 
 
 
@@ -539,8 +492,8 @@ public:
     }
     void setConvolver(int x, float y)
     {
-        if(x<0||x>=ENVELOPE_LENGTH) return;
-        (*convolver)[x]=std::max(-1.f,std::min(1.f,y));
+        if(x<0||x>=MAX_SAMPLE_LENGTH) return;
+        (*convolver)[x].store(std::max(-1.f,std::min(1.f,y)),std::memory_order_relaxed);
     }
     void erase(std::vector<float> &vec, int start, int end)
     {
@@ -833,14 +786,15 @@ public:
         UndoItem *tempRedoPtr;
         if(item->isAtomic)
             tempRedoPtr=new UndoItem(item->atomicDataPtr);
-        else  tempRedoPtr=new UndoItem(item->dataPtr);
+        // else  tempRedoPtr=new UndoItem(item->dataPtr);
         tempRedoPtr->shouldContinue=item->shouldContinue;
         return tempRedoPtr;
     }
     DataType getUndoItemDataType(UndoItem *item)
     {
+        std::cout<<"getundoitemdatatype "<<item->isAtomic<<std::endl;
 
-        if(item->dataPtr==convolver) return dataTypeConvolver;
+        if(item->atomicDataPtr==convolver) return dataTypeConvolver;
         if(item->atomicDataPtr==&(module->envelope)) return dataTypeEnvelope;
 
         if(item->atomicDataPtr==&(module->sample->sampleData[0])) return dataTypeWaveL;
@@ -848,46 +802,47 @@ public:
     }
     void undo()
     {
-        undoCount=std::max(0,undoCount-1);
-        redoCount=std::min(MAX_UNDO_DEPTH-2,redoCount+1);
+        dspPointer->undoCount=std::max(0,dspPointer->undoCount-1);
+        dspPointer->redoCount=std::min(MAX_UNDO_DEPTH-2,dspPointer->redoCount+1);
 
-        int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
-        std::cout<<"undo "<<currentIndex<<" type: "<<getUndoItemDataType(undoItems[currentIndex])<<std::endl;
+        int currentIndex=(dspPointer->nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
+        DataType type=getUndoItemDataType(undoItems[currentIndex]);
+        std::cout<<"undo "<<currentIndex<<" type: "<< type<<std::endl;
 
         int lastIndex=(currentIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
 
-        bool shouldContinue=(undoCount&&undoItems[currentIndex]->shouldContinue);
-        nextUndoIndex=currentIndex;
+        bool shouldContinue=(dspPointer->undoCount&&undoItems[currentIndex]->shouldContinue);
+        dspPointer->nextUndoIndex=currentIndex;
 
-        UndoItem *tempRedoPtr=copyUndoItem(undoItems[nextUndoIndex]);
+        UndoItem *tempRedoPtr=copyUndoItem(undoItems[dspPointer->nextUndoIndex]);
 
-        undoItems[nextUndoIndex]->apply();
+        undoItems[dspPointer->nextUndoIndex]->apply();
 
-        delete(undoItems[nextUndoIndex]);
-        undoItems[nextUndoIndex]=tempRedoPtr;
+        delete(undoItems[dspPointer->nextUndoIndex]);
+        undoItems[dspPointer->nextUndoIndex]=tempRedoPtr;
         for(int i=0;i<2;i++)
         {
             calculateFFT(i);
         }
         module->process();
         if(shouldContinue) undo();
-        std::cout<<"finished undoing"<<nextUndoIndex<<std::endl;
+        std::cout<<"finished undoing"<<dspPointer->nextUndoIndex<<std::endl;
     }
     void redo()
     {
-        undoCount=std::min(MAX_UNDO_DEPTH-2,undoCount+1);
-        redoCount=std::max(0,redoCount-1);
+        dspPointer->undoCount=std::min(MAX_UNDO_DEPTH-2,dspPointer->undoCount+1);
+        dspPointer->redoCount=std::max(0,dspPointer->redoCount-1);
 
-        std::cout<<"redo"<<nextUndoIndex<<std::endl;
-        int nextIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
-        bool shouldContinue=(redoCount&&undoItems[nextIndex]->shouldContinue);
-        UndoItem *tempRedoPtr=copyUndoItem(undoItems[nextUndoIndex]);
+        std::cout<<"redo"<<dspPointer->nextUndoIndex<<std::endl;
+        int nextIndex=(dspPointer->nextUndoIndex+1)%MAX_UNDO_DEPTH;
+        bool shouldContinue=(dspPointer->redoCount&&undoItems[nextIndex]->shouldContinue);
+        UndoItem *tempRedoPtr=copyUndoItem(undoItems[dspPointer->nextUndoIndex]);
 
 
-        undoItems[nextUndoIndex]->apply();
-        delete(undoItems[nextUndoIndex]);
-        undoItems[nextUndoIndex]=tempRedoPtr;
-        nextUndoIndex=nextIndex;
+        undoItems[dspPointer->nextUndoIndex]->apply();
+        delete(undoItems[dspPointer->nextUndoIndex]);
+        undoItems[dspPointer->nextUndoIndex]=tempRedoPtr;
+        dspPointer->nextUndoIndex=nextIndex;
         for(int i=0;i<2;i++)
         {
             calculateFFT(i);
@@ -898,20 +853,20 @@ public:
     template <typename T>
     void addUndoItem(std::vector<T>* data, bool shouldContinue = false)
     {
-        undoCount=std::min(MAX_UNDO_DEPTH-2,undoCount+1);
-        redoCount=std::max(0,redoCount-1);
-        std::cout<<"addundoitem "<<nextUndoIndex<<std::endl;
-        int currentIndex=(nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
+        dspPointer->undoCount=std::min(MAX_UNDO_DEPTH-2,dspPointer->undoCount+1);
+        dspPointer->redoCount=std::max(0,dspPointer->redoCount-1);
+        std::cout<<"addundoitem "<<dspPointer->nextUndoIndex<<std::endl;
+        int currentIndex=(dspPointer->nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
 
-        if(undoItems[nextUndoIndex])
+        if(undoItems[dspPointer->nextUndoIndex])
         {
-            delete(undoItems[nextUndoIndex]);
+            delete(undoItems[dspPointer->nextUndoIndex]);
         }
-        undoItems[nextUndoIndex]=new UndoItem(data, shouldContinue);
-        nextUndoIndex=(nextUndoIndex+1)%MAX_UNDO_DEPTH;
-        if(undoItems[nextUndoIndex]&&undoItems[nextUndoIndex]->shouldContinue)
+        undoItems[dspPointer->nextUndoIndex]=new UndoItem(data, shouldContinue);
+        dspPointer->nextUndoIndex=(dspPointer->nextUndoIndex+1)%MAX_UNDO_DEPTH;
+        if(undoItems[dspPointer->nextUndoIndex]&&undoItems[dspPointer->nextUndoIndex]->shouldContinue)
         {
-            undoItems[nextUndoIndex]->shouldContinue=false;
+            undoItems[dspPointer->nextUndoIndex]->shouldContinue=false;
         }
     }
     void displayButtonSelector(const char* const*labels,int length,int &selectedIndex, bool large=false)
@@ -962,10 +917,10 @@ public:
             // if(ImGui::BeginChild("Toolbar", ImVec2(0.f, 0.f), ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY))
             // {
             ImGui::PushFont(iconFontLarge);
-            int currentIndex=(nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH;
-            bool redoDataAvailable=(undoItems[nextUndoIndex]!=NULL);
-            bool canRedo=(bool)redoCount;
-            bool canUndo=(undoItems[currentIndex]&&undoCount);
+            int currentIndex=(dspPointer->nextUndoIndex+MAX_UNDO_DEPTH-1)%MAX_UNDO_DEPTH;
+            bool redoDataAvailable=(undoItems[dspPointer->nextUndoIndex]!=NULL);
+            bool canRedo=(bool)dspPointer->redoCount;
+            bool canUndo=(undoItems[currentIndex]&&dspPointer->undoCount);
             ImGui::BeginDisabled(!canUndo);
             if(ImGui::Button(UNDO_ICON)&&canUndo)
             {
@@ -1093,21 +1048,8 @@ public:
 
     }
 
-    void configureSmallGraph()
+    void drawGraphEnvelopeBox()
     {
-        setInputMap();
-
-        ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock|ImPlotAxisFlags_NoGridLines);
-        ImPlot::SetupAxisLimits(ImAxis_Y1, -1.18, 1.18, ImPlotCond_Always);
-        ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
-
-        ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoGridLines|ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
-        ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
-        ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -10.0, 209.0);
-        ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, 219.0);
-
-
-
         ImPlotSpec bound_spec;
         bound_spec.LineColor = ImVec4(0.5f, 0.5f, 0.5f, 0.5f);
         bound_spec.LineWeight = 1.5f;
@@ -1136,10 +1078,29 @@ public:
         ImPlot::PlotLine("##Horiz1", h_line_x, h_line_y1, 2, bound_spec);
     }
 
+    void configureSmallGraph(float xMax=209.f)
+    {
+        setInputMap();
+
+        ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
+        ImPlot::SetupAxisLimits(ImAxis_Y1, -1.18, 1.18, ImPlotCond_Always);
+        ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
+
+        ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
+        ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
+        ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -10.0, xMax);
+        ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, xMax+10);
+
+
+
+
+    }
+
     void displayEnvelope(){
         ImPlot::SetCurrentContext(imPlotContext[6]);
         if(ImPlot::BeginPlot("Envelope",ImVec2(-1.0f, 200.0f))){
             configureSmallGraph();
+            drawGraphEnvelopeBox();
             ImPlot::PlotScatterG("Envelope", envelopeGetter, &dspPointer->modules[0]->envelope, ENVELOPE_LENGTH, spec);
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
             {
@@ -1167,16 +1128,26 @@ public:
 
     void displayConvolver()
     {
+        float tempLength=dspPointer->convolverLength;
+        ImGui::SetNextItemWidth(-150);
+        ImGui::SliderFloat ("Length##Convolver",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
+        length=std::max(1, std::min(MAX_SAMPLE_LENGTH,(int)tempLength));
+        if(length!=dspPointer->convolverLength)
+        {
+            dspPointer->convolverLength=length;
+            setDirty();
+
+        }
 
         ImPlot::SetCurrentContext(imPlotContext[6]);
         if(ImPlot::BeginPlot("Convolver##convolverplot",ImVec2(-1.0f, 200.0f))){
-            configureSmallGraph();
-            std::vector<float> xValues;
-            for(int i=0;i<ENVELOPE_LENGTH;i++)
-            {
-                xValues.push_back(i);
-            }
-            ImPlot::PlotScatter("Convolver", xValues.data(), (*convolver).data(), ENVELOPE_LENGTH, spec);
+            configureSmallGraph((float)(MAX_SAMPLE_LENGTH+1000));
+            // std::vector<float> xValues;
+            // for(int i=0;i<ENVELOPE_LENGTH;i++)
+            // {
+            //     xValues.push_back(i);
+            // }
+            ImPlot::PlotScatterG("Convolver", convolverGetter, dspPointer->convolver, dspPointer->convolverLength, spec);
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
             {
                 if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
@@ -1507,13 +1478,11 @@ public:
         }
         delete spectrum[0];delete spectrum[1];
         delete convolverSpectrum;
-        delete convolver;
+
         HWND hwnd = (HWND)parentWindow->getNativeWindowHandle();
         ::RemoveWindowSubclass(hwnd, SubclassMenuProc, reinterpret_cast<UINT_PTR>(this));
-        for(int i=0;i<MAX_UNDO_DEPTH;i++)
-        {
-            if(undoItems[i])delete undoItems[i];
-        }
+
+
 
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleEditor)

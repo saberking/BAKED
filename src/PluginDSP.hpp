@@ -6,6 +6,7 @@
 #include "WinConsoleOutput.hpp"
 #include "AudioData.hpp"
 #include "external/base64.h"
+#include "Undo.hpp"
 
 START_NAMESPACE_DISTRHO
 
@@ -15,6 +16,13 @@ class ImGuiPluginDSP : public Plugin
     bool releaseEnabled=false;
     bool consoleAttached=false;
 public:
+    UndoItem *undoItems[MAX_UNDO_DEPTH];
+    int nextUndoIndex=0;
+    int undoCount=0,redoCount=0;
+
+    std::vector<std::atomic<float>> *convolver;
+
+    int convolverLength=200;
 
     std::vector<Module *> modules;//pointless to have more than one.
                                 // polyphonic effects should be baked in and monophonic can be separate plugins
@@ -32,11 +40,33 @@ public:
         std::vector<float *>levels;
         levels.push_back(&fSpeed);
         modules.push_back(new Module(levels, &fSpeed, &fSpeed, &releaseEnabled));
+        for(int i=0;i<MAX_UNDO_DEPTH;i++)
+        {
+            undoItems[i]=NULL;
+        }
+
+        for(int i=0;i<MAX_UNDO_DEPTH;i++)
+        {
+            undoItems[i]=NULL;
+        }
+
+
+        convolver=new std::vector<std::atomic<float>>(MAX_SAMPLE_LENGTH);
+        for(int i=0;i<MAX_SAMPLE_LENGTH;i++)
+        {
+            (*convolver)[i]=0.f;
+        }
+
 
     }
     ~ImGuiPluginDSP(){
         for(int i=0;i<modules.size();i++){
             delete(modules[i]);
+        }
+        delete convolver;
+        for(int i=0;i<MAX_UNDO_DEPTH;i++)
+        {
+            if(undoItems[i])delete undoItems[i];
         }
     }
 

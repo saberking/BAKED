@@ -1,6 +1,5 @@
 
 
-make envelope length sample length
 convolver length, save convolver in dsp
 save undo history in dsp
 

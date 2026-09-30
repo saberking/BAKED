@@ -23,7 +23,6 @@
 START_NAMESPACE_DISTRHO
 
 
-
 //for right click autmoaiton clip
 class ImGuiPluginUI : public UI, public FileDropReceiver
 {
