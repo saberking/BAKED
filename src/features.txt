@@ -1,84 +1,88 @@
 
-
-
-
-add another module
-
-
 Save everything properly
 
 
 copy and paste partials and phase
+
+paste strength, multiply mode
+
+dice tool
+
 -----------------------------
 
 midinote&velocity
 interpolation
 
+zero tool
+
+
+-----------------------------------
+************************************
+-------------------------------------
+
 stereo blend button
+
 
 playstart tool
 
 
 
-
-zero tool
-
-
-
-
------------------------------------
-************************************
--------------------------------------
-paste strength
-
+make convolver stereo
 
 ****zoom tool, leftclick to zoom in right to zoom out****
 ****graph more sensitive to zoom                     ****
 ****xaxis squared scale                              ****
-****load sample as partials or phase                 ****
 ****load sample as convolver                         ****
-****load sample as envelope                          ****
-****load sample into "mixer"                         ****
 
------------------------------------
-************************************
--------------------------------------
-convolver only partials or only phase or both
+--------------------------------
 
-dice tool
-self convolve
-
-export sample
-save preset
-
-HiDPI awareness
-resize UI
-
------------
 pitcher (partial multiply or divide and round)
 stretcher (waveform resample by keeping partials and changing length)
 harmonise/noisify (copmress/expand partials)
 partial shift
------------------
 
-cossfade tool
-
-trim sample to length button
-when saving, trim zeros
+-----------------------------------
+************************************
 -------------------------------------
 
 
-that special evenly spaced math phase tool
+export sample
+save preset
 
+
+
+-----------
+
+
+
+trim sample to length button
+when saving, trim zeros
 plotG is slow maybe if it not in order
+
+-------------------------------------
+
+
+show convolver partials/phase
+convolver only partials or only phase or both
+
+self convolve
+
+HiDPI awareness
+resize UI
+
 
 --------------------------------------------
 *********************************************
 --------------------------------------------
+add another module
 
 
-reverb
-LFO
+cossfade tool
+
+
+that special evenly spaced math phase tool
+
+
 -----------------------------------------
 
 align plots by switchig from tsable to subplots
