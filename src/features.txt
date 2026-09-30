@@ -1,9 +1,4 @@
 
-
-convolver length, save convolver in dsp
-save undo history in dsp
-
-
 copy and paste tools
 zero tool
 
