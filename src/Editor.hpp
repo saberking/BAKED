@@ -489,7 +489,7 @@ public:
     void setEnvelope(int x, float y)
     {
         if(x<0||x>=ENVELOPE_LENGTH) return;
-        module->envelope[x].store(std::max(-1.f,std::min(1.f,y)), std::memory_order_relaxed);
+        module->envelope[x].store(std::max(0.f,std::min(1.f,y)), std::memory_order_relaxed);
         setDirty();
     }
     void setConvolver(int x, float y)
@@ -726,6 +726,12 @@ public:
                 exponential*=multiplier;
                 (*spectrum[j])[i]=(*spectrum[j])[i]*exponential;
             }
+            exponential=1.f;
+            for (int i=length/1000;i>=0;i--)
+            {
+                exponential*=multiplier;
+                (*spectrum[j])[i]=(*spectrum[j])[i]*exponential;
+            }
             addUndoItem(&(module->sample->sampleData[j]),j==1);
 
             calculateWaveform(j);
@@ -744,7 +750,11 @@ public:
             for(int i=0;i<module->sample->length.load(std::memory_order_relaxed);i++)
                 module->sample->sampleData[j][i].store(module->sample->sampleData[j][i].load(std::memory_order_relaxed)*recip);
             isWaveformChanged[j]=true;
-            if(isLiveUpdate) calculateFFT(j);
+            if(isLiveUpdate)
+            {
+                calculateFFT(j);
+            }
+            module->process();
         }
 
     }
@@ -1074,14 +1084,14 @@ public:
 
     }
 
-    void drawGraphEnvelopeBox()
+    void drawEnvelopeBox()
     {
         ImPlotSpec bound_spec;
         bound_spec.LineColor = ImVec4(0.5f, 0.5f, 0.5f, 0.5f);
         bound_spec.LineWeight = 1.5f;
 
         // --- VERTICAL BOUNDS (From Y=0 to Y=1) ---
-        double v_line_y[] = { -1.0, 1.0 };
+        double v_line_y[] = { 0.0, 1.0 };
         double v_line_x0[] = { 0.0, 0.0 };
         double v_line_x200[] = { 200.0, 200.0 };
 
@@ -1094,7 +1104,7 @@ public:
 
         // --- HORIZONTAL BOUNDS (From X=0 to X=200) ---
         double h_line_x[] = { 0.0, 200.0 };
-        double h_line_y0[] = { -1.0, -1.0 };
+        double h_line_y0[] = { 0.0, 0.0 };
         double h_line_y1[] = { 1.0, 1.0 };
 
         // Bottom horizontal edge at Y=0
@@ -1104,21 +1114,18 @@ public:
         ImPlot::PlotLine("##Horiz1", h_line_x, h_line_y1, 2, bound_spec);
     }
 
-    void configureSmallGraph(float xMax=209.f)
+    void configureSmallGraph(float xMax=209.f, float yMin=-0.002f)
     {
         setInputMap();
 
         ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
-        ImPlot::SetupAxisLimits(ImAxis_Y1, -1.18, 1.18, ImPlotCond_Always);
+        ImPlot::SetupAxisLimits(ImAxis_Y1, yMin, 1.18, ImPlotCond_Always);
         ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
         ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
         ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
-        ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -10.0, xMax);
+        ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, std::max(-0.05f*xMax, -100.f), xMax);
         ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, xMax+10);
-
-
-
 
     }
 
@@ -1126,7 +1133,7 @@ public:
         ImPlot::SetCurrentContext(imPlotContext[6]);
         if(ImPlot::BeginPlot("Envelope",ImVec2(-1.0f, 200.0f))){
             configureSmallGraph();
-            drawGraphEnvelopeBox();
+            drawEnvelopeBox();
             ImPlot::PlotScatterG("Envelope", envelopeGetter, &dspPointer->modules[0]->envelope, ENVELOPE_LENGTH, spec);
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
             {
@@ -1167,7 +1174,7 @@ public:
 
         ImPlot::SetCurrentContext(imPlotContext[6]);
         if(ImPlot::BeginPlot("Convolver##convolverplot",ImVec2(-1.0f, 200.0f))){
-            configureSmallGraph((float)(MAX_SAMPLE_LENGTH+1000));
+            configureSmallGraph((float)(MAX_SAMPLE_LENGTH+1000), -1.18f);
             // std::vector<float> xValues;
             // for(int i=0;i<ENVELOPE_LENGTH;i++)
             // {

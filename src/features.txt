@@ -1,25 +1,35 @@
 
-copy and paste tools
-zero tool
 
 
 
-
-playstart tool
-
+add another module
 
 
+Save everything properly
+
+
+copy and paste partials and phase
+-----------------------------
 
 midinote&velocity
 interpolation
 
 stereo blend button
 
-Save everything properly
+playstart tool
+
+
+
+
+zero tool
+
+
+
 
 -----------------------------------
 ************************************
 -------------------------------------
+paste strength
 
 
 ****zoom tool, leftclick to zoom in right to zoom out****
