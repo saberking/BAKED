@@ -97,6 +97,8 @@ public:
     DataType dragDataType;
     ImFont *iconFontLarge,*iconFontRegular;
 
+    std::vector<std::atomic<float>> *copyPtr=NULL;
+    int copyLength;
 
     SampleEditor(const char *_name, Module *_module, Window& _window,
                  std::function<void(const char*)> _fileDropped, std::function<void()> _setDirty,
@@ -869,6 +871,29 @@ public:
             undoItems[dspPointer->nextUndoIndex]->shouldContinue=false;
         }
     }
+
+    void copy(std::vector<std::atomic<float>> *vec, int length)
+    {
+        copyPtr=vec;
+        copyLength=length;
+    }
+
+    void paste(std::vector<std::atomic<float>> *vec)
+    {
+        if(copyPtr==NULL) return;
+        if(vec==copyPtr) return;
+        addUndoItem(vec);
+        std::cout<<"added paste undo"<<std::endl;
+        for(int i=0;i<copyLength;i++)
+        {
+            (*vec)[i].store((*copyPtr)[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+        }
+        if(vec==convolver) dspPointer->convolverLength=std::max(dspPointer->convolverLength, copyLength);
+        copyPtr=NULL;
+        setDirty();
+        selectedButtonIndex=toolbarButtonsHand;
+    }
+
     void displayButtonSelector(const char* const*labels,int length,int &selectedIndex, bool large=false)
     {
         if(large)ImGui::PushFont(iconFontLarge);
@@ -882,10 +907,11 @@ public:
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
             }
 
+            ImGui::BeginDisabled(i==toolbarButtonsPaste&&copyPtr==NULL);
             if (ImGui::Button(labels[i])) {
                 selectedIndex = i; // Update selection state on click
             }
-
+            ImGui::EndDisabled();
             if (is_selected) {
                 ImGui::PopStyleColor(2);
             }
@@ -1163,6 +1189,14 @@ public:
                         );
 
                 }
+                if(selectedButtonIndex==toolbarButtonsCopy)
+                {
+                    copy(dspPointer->convolver,dspPointer->convolverLength);
+                }
+                if(selectedButtonIndex==toolbarButtonsPaste)
+                {
+                    paste(dspPointer->convolver);
+                }
             }
             ImPlot::EndPlot();
 
@@ -1292,6 +1326,22 @@ public:
                                 calculateFFT(channel);
                                 module->process();
                             }
+                        }
+                        if(selectedButtonIndex==toolbarButtonsCopy)
+                        {
+                            copy(&(data->sampleData[channel]),data->length.load(std::memory_order_relaxed));
+                        }
+                        if(selectedButtonIndex==toolbarButtonsPaste)
+                        {
+                            paste(&(data->sampleData[channel]));
+                            isWaveformChanged[channel]=true;
+                            std::cout<<"iswaveformchanged=true"<<std::endl;
+                            if(isLiveUpdate)
+                            {
+                                calculateFFT(channel);
+                                module->process();
+                            }
+
                         }
                     }
                     showPlayhead();
