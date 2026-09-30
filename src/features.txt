@@ -1,26 +1,25 @@
 
 
-Save everything properly
 
+
+
+midinote&velocity
+interpolation
+
+Save everything properly
 
 copy and paste partials and phase
 
 paste strength, multiply mode
 
+dice tool
 
------------------------------
-
-midinote&velocity
-interpolation
-
-
-
------------------------------------
+-------------------------------------
 ************************************
 -------------------------------------
+
 zero tool
 
-dice tool
 
 stereo blend button
 

@@ -701,10 +701,10 @@ public:
             }
             isWaveformChanged[j]=true;
         }
+        module->process();
 
         if(isLiveUpdate)
         {
-            module->process();
             for(int j=0;j<2;j++)
             {
                 calculateFFT(j);
