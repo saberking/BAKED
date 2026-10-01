@@ -3,13 +3,16 @@ Save everything properly
 
 copy and paste partials and phase
 
-paste strength, multiply mode
 
-dice tool
 
 -------------------------------------
 ************************************
 -------------------------------------
+paste strength, multiply mode
+
+
+dice tool
+
 
 zero tool
 
