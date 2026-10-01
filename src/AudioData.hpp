@@ -38,7 +38,7 @@ inline float interpolate(float lower, float upper, float position, Interpolation
 class AudioData
 {
 public:
-    std::atomic<int> channels = 1;
+    // std::atomic<int> channels = 1;
     const int maxChannels;
     std::vector<std::atomic<float>> sampleData[2];
     std::atomic<int> length=1;
@@ -54,16 +54,16 @@ public:
     }
 
 
-    void loadWavFile(const char* filePath)
+    int loadWavFile(const char* filePath)
     {
-        if (filePath == nullptr) return;
+        if (filePath == nullptr) return 0;
         std::cout << "load " << filePath << std::endl;
 
         drwav wav;
         // Open the WAV file safely
         if (!drwav_init_file(&wav, filePath, nullptr)) {
             std::cout << "ERRRRRRRRRRRR (Failed to open file via dr_wav)" << std::endl;
-            return;
+            return 0;
         }
         std::cout << "loaded" << std::endl;
 
@@ -73,9 +73,9 @@ public:
         std::cout << audioFileChannels << " channels" << std::endl;
 
         int noOfChannels=std::max(1, std::min(2, audioFileChannels));
-        channels.store(noOfChannels, std::memory_order_relaxed);
+        // channels.store(noOfChannels, std::memory_order_relaxed);
 
-        std::cout << "stored channels" << std::endl;
+        // std::cout << "stored channels" << std::endl;
 
         // Bind buffer limit sizes safely
         int tempLength = std::min(totalFrames, MAX_SAMPLE_LENGTH);
@@ -112,6 +112,7 @@ public:
         }
 
         std::cout << "length: " << length.load(std::memory_order_relaxed) << "\n\n";
+        return audioFileChannels;
     }
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioData)
@@ -308,17 +309,16 @@ inline void SamplePlaybackEngineMonophonic::run(float outputs[2], float recipLen
         playhead,
         module->interpolationMode->load(std::memory_order_relaxed)
         );
-    outputs[0]=outputs[1]=interpolated*volume
-        ;
-    if(module->sample->channels.load(std::memory_order_relaxed)==2){
-        interpolated=interpolate(
-            module->processed->sampleData[1][lower].load(std::memory_order_relaxed),
-            module->processed->sampleData[1][upper].load(std::memory_order_relaxed),
-            playhead,
-            module->interpolationMode->load(std::memory_order_relaxed)
-            );
-        outputs[1]=interpolated*volume;
-    }
+    outputs[0]=interpolated*volume;
+
+    interpolated=interpolate(
+        module->processed->sampleData[1][lower].load(std::memory_order_relaxed),
+        module->processed->sampleData[1][upper].load(std::memory_order_relaxed),
+        playhead,
+        module->interpolationMode->load(std::memory_order_relaxed)
+        );
+    outputs[1]=interpolated*volume;
+
     timeStep();
 }
 END_NAMESPACE_DISTRHO

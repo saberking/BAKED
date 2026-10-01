@@ -78,11 +78,10 @@ public:
         {
             editor->addUndoItem(&(editor->module->sample->sampleData[i]),i==1);
         }
-        getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
+        int channels=getPluginDPSPointer()->modules[0]->sample->loadWavFile(path);
         strcpy(sampleFilePath, path);
-        bool isMono=(getPluginDPSPointer()->modules[0]->sample->channels.load(std::memory_order_relaxed)==1);
         editor->module->speakerConnections.store(speakerLR);
-        if(isMono) editor->module->speakerConnections.store(speakerLL);
+        if(channels==1) editor->module->speakerConnections.store(speakerLL);
         for(int i =0;i<2;i++)
         {
             editor->calculateFFT(i);

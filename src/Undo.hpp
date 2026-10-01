@@ -2,19 +2,10 @@
 #define UNDO_HPP
 
 #include "src/DistrhoDefines.h"
-
+#include "Defines.hpp"
 START_NAMESPACE_DISTRHO
 #define MAX_UNDO_DEPTH 12
-enum DataType{
-    dataTypeEnvelope,
-    dataTypeConvolver,
-    dataTypeWaveL,
-    dataTypeWaveR,
-    dataTypeSpectrumL,
-    dataTypeSpectrumR,
-    dataTypePhaseL,
-    dataTypePhaseR
-};
+
 
 struct UndoItem
 {

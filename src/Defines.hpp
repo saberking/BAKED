@@ -4,4 +4,15 @@
 
 #define NO_OF_PLOT_CONTEXTS 12
 #define DEBUG 1
+enum DataType{
+    dataTypeEnvelope,
+    dataTypeConvolver,
+    dataTypeWaveL,
+    dataTypeWaveR,
+    dataTypeSpectrumL,
+    dataTypeSpectrumR,
+    dataTypePhaseL,
+    dataTypePhaseR,
+    dataTypeNone
+};
 #endif // DEFINES_HPP

@@ -159,10 +159,10 @@ protected:
 
             // 1. Pack your sizes and channels sequentially into a simple local raw byte array
             size_t headerSize = sizeof(uint32_t);
-            size_t channelsSize=sizeof(uint32_t);
+            // size_t channelsSize=sizeof(uint32_t);
             size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
             size_t envelopeSize=ENVELOPE_LENGTH*sizeof(float);
-            size_t totalBytes = headerSize + (channelDataSize * 2)+channelsSize +envelopeSize;
+            size_t totalBytes = headerSize + (channelDataSize * 2)/*+channelsSize*/ +envelopeSize;
 
             std::vector<uint8_t> rawBinaryBuffer(totalBytes);
             uint32_t length = static_cast<uint32_t>(modules[0]->sample->length.load(std::memory_order_relaxed));
@@ -179,10 +179,10 @@ protected:
                 rightDest[i] = modules[0]->sample->sampleData[1][i].load(std::memory_order_relaxed);
             }
 
-            uint32_t channels = static_cast<uint32_t>(modules[0]->sample->channels.load(std::memory_order_relaxed));
-            std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2, &channels, channelsSize);
+            // uint32_t channels = static_cast<uint32_t>(modules[0]->sample->channels.load(std::memory_order_relaxed));
+            // std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2, &channels, channelsSize);
 
-            float *envelopeDest=reinterpret_cast<float*>(rawBinaryBuffer.data()+headerSize+channelDataSize*2+channelsSize);
+            float *envelopeDest=reinterpret_cast<float*>(rawBinaryBuffer.data()+headerSize+channelDataSize*2/*+channelsSize*/);
             for (uint32_t i = 0; i < ENVELOPE_LENGTH; ++i) {
                 envelopeDest[i] = modules[0]->envelope[i].load(std::memory_order_relaxed);
             }
@@ -215,7 +215,7 @@ protected:
             // 4. Extract data directly out of the remaining decoded data stream
             size_t headerSize = sizeof(uint32_t);
             size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
-            size_t channelsSize=sizeof(uint32_t);
+            // size_t channelsSize=sizeof(uint32_t);
 
 
             // Create temporary pointers pointing to the raw decoded byte stream
@@ -230,11 +230,11 @@ protected:
                 modules[0]->sample->sampleData[1][i].store(rightSrc[i], std::memory_order_relaxed);
             }
 
-            uint32_t channels;
-            std::memcpy(&channels, rawData + headerSize + channelDataSize*2, sizeof(uint32_t));
-            modules[0]->sample->channels.store(channels, std::memory_order_relaxed);
+            // uint32_t channels;
+            // std::memcpy(&channels, rawData + headerSize + channelDataSize*2, sizeof(uint32_t));
+            // modules[0]->sample->channels.store(channels, std::memory_order_relaxed);
 
-            const float *envelopeSrc=reinterpret_cast<const float*>(rawData+headerSize+channelDataSize*2+channelsSize);
+            const float *envelopeSrc=reinterpret_cast<const float*>(rawData+headerSize+channelDataSize*2/*+channelsSize*/);
             for (uint32_t i = 0; i < ENVELOPE_LENGTH; ++i) {
                 modules[0]->envelope[i].store(envelopeSrc[i], std::memory_order_relaxed);
 

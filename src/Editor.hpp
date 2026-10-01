@@ -96,7 +96,7 @@ public:
     ToolbarButtons selectedButtonIndex=toolbarButtonsHand;
     static constexpr const char* toolbarIcons[6] = { HAND_ICON, PENCIL_ICON, LINE_ICON, ERASER_ICON,COPY_ICON,PASTE_ICON };
 
-
+    DataType copyDataType=dataTypeNone;
     DataType dragDataType;
     ImFont *iconFontLarge,*iconFontRegular;
 
@@ -885,26 +885,102 @@ public:
         }
     }
 
-    void copy(std::vector<std::atomic<float>> *vec, int length)
+    void copy(DataType dataType, int length)
     {
-        copyPtr=vec;
+        copyDataType=dataType;
         copyLength=length;
     }
 
-    void paste(std::vector<std::atomic<float>> *vec)
+    void copySpectrum(int target, int source)
     {
-        if(copyPtr==NULL) return;
-        if(vec==copyPtr) return;
-        addUndoItem(vec);
+        addUndoItem(&(data->sampleData[target]));
+        for(int i=0;i<data->length.load(std::memory_order_relaxed)/2+1;i++)
+        {
+            float phase=(std::abs((*spectrum[target])[i])?std::arg((*spectrum[target])[i]):-M_PI/2+0.000001);
+
+            float sourceAbs=std::abs((*spectrum[source])[i]);
+            std::complex<float>newVal=std::polar<float>(sourceAbs,phase);
+            (*spectrum[target])[i]=newVal;
+        }
+        calculateWaveform(target);
+    }
+    void copyPhase(int target, int source)
+    {
+
+        addUndoItem(&(data->sampleData[target]));
+
+        for(int i=0;i<data->length/2+1;i++)
+        {
+
+            (*spectrum[target])[i]=std::polar<float>(std::abs((*spectrum[target])[i]),std::arg((*spectrum[source])[i]));
+        }
+
+        calculateWaveform(target);
+    }
+    void copyAtomicVector(std::vector<std::atomic<float>> *vec1, std::vector<std::atomic<float>> *vec2)
+    {
+        if(vec1==vec2)std::cout<<"BIFGGGGGGGGGGERRRRPRRRRRRRRR"<<std::endl;
+        addUndoItem(vec1);
         std::cout<<"added paste undo"<<std::endl;
+
         for(int i=0;i<copyLength;i++)
         {
-            (*vec)[i].store((*copyPtr)[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+            (*vec1)[i].store((*vec2)[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+            // std::cout<<i<<std::endl;
         }
-        if(vec==convolver) dspPointer->convolverLength=std::max(dspPointer->convolverLength, copyLength);
-        copyPtr=NULL;
+    }
+    std::vector<std::atomic<float>>*getData(DataType type)
+    {
+        std::vector<std::atomic<float>> *copyData;
+        if(type==dataTypeWaveL)
+            copyData=&(data->sampleData[0]);
+        if(type==dataTypeWaveR)
+            copyData=&(data->sampleData[1]);
+        if(type==dataTypeConvolver)
+            copyData=dspPointer->convolver;
+        return copyData;
+    }
+    void endCopy()
+    {
+        copyDataType=dataTypeNone;
         setDirty();
         selectedButtonIndex=toolbarButtonsHand;
+    }
+    void paste(DataType dataType)
+    {
+        if(dataType==copyDataType) return;
+        if((dataType==dataTypePhaseL||dataType==dataTypePhaseR)&&copyDataType!=dataTypePhaseL&&copyDataType!=dataTypePhaseR) return;
+        if((dataType==dataTypeSpectrumL||dataType==dataTypeSpectrumR)&&copyDataType!=dataTypeSpectrumL&&copyDataType!=dataTypeSpectrumR) return;
+        if((copyDataType==dataTypePhaseL||copyDataType==dataTypePhaseR)&&dataType!=dataTypePhaseL&&dataType!=dataTypePhaseR) return;
+        if((copyDataType==dataTypeSpectrumL||copyDataType==dataTypeSpectrumR)&&dataType!=dataTypeSpectrumL&&dataType!=dataTypeSpectrumR) return;
+
+        if(dataType==dataTypePhaseL)
+        {
+            copyPhase(0,1);
+        }
+        else if(dataType==dataTypePhaseR)
+        {
+            copyPhase(1,0);
+        }
+        else if(dataType==dataTypeSpectrumL)
+        {
+            copySpectrum(0,1);
+        }
+        else if(dataType==dataTypeSpectrumR)
+        {
+            copySpectrum(1,0);
+        }
+        else
+        {
+            std::vector<std::atomic<float>> *copyData, *targetData;
+            copyData=getData(copyDataType);
+            targetData=getData(dataType);
+            copyAtomicVector(targetData, copyData);
+            if(dataType==dataTypeConvolver) dspPointer->convolverLength=std::max(dspPointer->convolverLength, copyLength);
+
+        }
+        endCopy();
+
     }
 
     void displayButtonSelector(const char* const*labels,int length,int &selectedIndex, bool large=false)
@@ -920,7 +996,7 @@ public:
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
             }
 
-            ImGui::BeginDisabled(i==toolbarButtonsPaste&&copyPtr==NULL);
+            ImGui::BeginDisabled(i==toolbarButtonsPaste&&copyDataType==dataTypeNone);
             if (ImGui::Button(labels[i])) {
                 selectedIndex = i; // Update selection state on click
             }
@@ -990,7 +1066,7 @@ public:
             {
                 if(isLiveUpdate)
                 {
-                    for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
+                    for(int j=0;j<2  ;j++)
                     {
 
                         if(isSpectrumChanged[j])calculateWaveform(j);
@@ -1001,7 +1077,7 @@ public:
             if(!isLiveUpdate)
             {
                 bool showUpdateButton=module->isEnvelopeChanged;
-                for(int j=0;j<data->channels.load(std::memory_order_relaxed);j++)
+                for(int j=0;j<2;j++)
                 {
                     showUpdateButton=(showUpdateButton||isSpectrumChanged[j]||isWaveformChanged[j]);
                 }
@@ -1012,7 +1088,7 @@ public:
                     if(ImGui::Button("Apply changes"))
                     {
                         bool process=module->isEnvelopeChanged;
-                        for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
+                        for(int j=0;j<2 ;j++)
                         {
 
                             if(isSpectrumChanged[j])calculateWaveform(j);
@@ -1244,11 +1320,11 @@ public:
                 }
                 if(selectedButtonIndex==toolbarButtonsCopy)
                 {
-                    copy(dspPointer->convolver,dspPointer->convolverLength);
+                    copy(dataTypeConvolver,dspPointer->convolverLength);
                 }
                 if(selectedButtonIndex==toolbarButtonsPaste)
                 {
-                    paste(dspPointer->convolver);
+                    paste(dataTypeConvolver);
                 }
             }
             ImPlot::EndPlot();
@@ -1311,7 +1387,7 @@ public:
         {
             data->length.store(length, std::memory_order_relaxed);
             setDirty();
-            for(int j=0;j<data->channels.load(std::memory_order_relaxed)  ;j++)
+            for(int j=0;j<2  ;j++)
             {
                 isWaveformChanged[j]=true;
                 if(isLiveUpdate)
@@ -1382,11 +1458,11 @@ public:
                         }
                         if(selectedButtonIndex==toolbarButtonsCopy)
                         {
-                            copy(&(data->sampleData[channel]),data->length.load(std::memory_order_relaxed));
+                            copy((DataType)(dataTypeWaveL+channel),data->length.load(std::memory_order_relaxed));
                         }
                         if(selectedButtonIndex==toolbarButtonsPaste)
                         {
-                            paste(&(data->sampleData[channel]));
+                            paste((DataType)(dataTypeWaveL+channel));
                             isWaveformChanged[channel]=true;
                             std::cout<<"iswaveformchanged=true"<<std::endl;
                             if(isLiveUpdate)
@@ -1448,6 +1524,14 @@ public:
                             }
 
                         }
+                        if(selectedButtonIndex==toolbarButtonsCopy)
+                        {
+                            copy((DataType)(dataTypeSpectrumL+channel),-1);
+                        }
+                        if(selectedButtonIndex==toolbarButtonsPaste)
+                        {
+                            paste((DataType)(dataTypeSpectrumL+channel));
+                        }
                     }
                     ImPlot::EndPlot();
                 }
@@ -1487,6 +1571,14 @@ public:
 
                                 calculateWaveform(channel);
                             }
+                        }
+                        if(selectedButtonIndex==toolbarButtonsCopy)
+                        {
+                            copy((DataType)(dataTypePhaseL+channel),-1);
+                        }
+                        if(selectedButtonIndex==toolbarButtonsPaste)
+                        {
+                            paste((DataType)(dataTypePhaseL+channel));
                         }
                     }
                     ImPlot::EndPlot();
