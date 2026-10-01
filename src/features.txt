@@ -1,6 +1,4 @@
 
-interpolation
-
 Save everything properly
 
 copy and paste partials and phase
