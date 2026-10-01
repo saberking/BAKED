@@ -44,6 +44,7 @@ struct AsyncMenuPayload {//for right click autmoaiton clip
     const clap_host_t* host;
     int32_t screenX;
     int32_t screenY;
+    Parameters parameter;
 };
 
 
@@ -79,6 +80,8 @@ public:
     double waveformXMax=-4;
     double waveformXMin=200;
     float fSpeed = 1.f;
+    float fNoteSensitivity=1.f;
+    float fVelocitySensitivity=1.f;
     ImGuiPluginDSP *dspPointer;
     Window *parentWindow;
     enum ToolbarButtons{
@@ -211,7 +214,7 @@ public:
                     {
                         clap_context_menu_target_t target;
                         target.kind = CLAP_CONTEXT_MENU_TARGET_KIND_PARAM;
-                        target.id = kParamSpeed;
+                        target.id = payload->parameter;
 
                         // Open the menu cleanly outside of the active ImGui/DPF render cycle.
                         // This un-freezes both windows and eliminates the multi-instance crash!
@@ -1028,20 +1031,8 @@ public:
             ImGui::EndTable();
         }
     }
-    void displayPlaybackControls()
+    void enableRightClick(Parameters parameter)
     {
-        ImGui::SetNextItemWidth(-100.f);
-        if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
-        {
-            if (ImGui::IsItemActivated())
-            {
-                    editParameter(kParamSpeed, true);
-            }
-            fSpeed=std::max(0.f,std::min(1.f,fSpeed));
-
-            setParameterValue(kParamSpeed, fSpeed);
-
-        }
         const uint32_t activeFormat = getPluginFormat();
         if (activeFormat == 1)
         {
@@ -1063,10 +1054,11 @@ public:
 
                         auto* payload = new AsyncMenuPayload();
                         payload->host = host;
-                        // int xOffset=0,yOffset=0;
+                        payload->parameter=parameter;
+                        int xOffset=0,yOffset=0;
                         // if (isVisible())getEmbeddedSubwindowOffset(xOffset,yOffset);
-                        // payload->screenX = mousePos.x+xOffset;
-                        // payload->screenY = mousePos.y+yOffset;
+                        payload->screenX = mousePos.x+xOffset;
+                        payload->screenY = mousePos.y+yOffset;
 
                         ::PostMessage(hwnd, WM_TRIGGER_CLAP_MENU, reinterpret_cast<WPARAM>(payload), 0);
                     }
@@ -1077,9 +1069,60 @@ public:
 
             }
         }
+    }
+    void displayPlaybackControls()
+    {
+        ImGui::SetNextItemWidth(-100.f);
+        if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
+        {
+            if (ImGui::IsItemActivated())
+            {
+                    editParameter(kParamSpeed, true);
+            }
+            fSpeed=std::max(0.f,std::min(1.f,fSpeed));
+
+            setParameterValue(kParamSpeed, fSpeed);
+
+        }
+        enableRightClick(kParamSpeed);
         if (ImGui::IsItemDeactivated())
         {
             editParameter(kParamSpeed, false);
+        }
+
+        ImGui::SetNextItemWidth(-100.f);
+
+        if(ImGui::SliderFloat ("Velocity",&fVelocitySensitivity, 0.f,1.f))
+        {
+            if (ImGui::IsItemActivated())
+            {
+                editParameter(kParamVelocitySensitivity, true);
+            }
+            fVelocitySensitivity=std::max(0.f,std::min(1.f,fVelocitySensitivity));
+
+            setParameterValue(kParamVelocitySensitivity, fVelocitySensitivity);
+        }
+        enableRightClick(kParamVelocitySensitivity);
+        if (ImGui::IsItemDeactivated())
+        {
+            editParameter(kParamVelocitySensitivity, false);
+        }
+        ImGui::SetNextItemWidth(-100.f);
+
+        if(ImGui::SliderFloat ("Midi note",&fNoteSensitivity, -1.f,1.f))
+        {
+            if (ImGui::IsItemActivated())
+            {
+                editParameter(kParamNoteSensitivity, true);
+            }
+            fNoteSensitivity=std::max(-1.f,std::min(1.f,fNoteSensitivity));
+
+            setParameterValue(kParamNoteSensitivity, fNoteSensitivity);
+        }
+        enableRightClick(kParamNoteSensitivity);
+        if (ImGui::IsItemDeactivated())
+        {
+            editParameter(kParamNoteSensitivity, false);
         }
 
     }

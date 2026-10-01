@@ -13,6 +13,8 @@ START_NAMESPACE_DISTRHO
 class ImGuiPluginDSP : public Plugin
 {
     float fSpeed = 1.0f;
+    float fVelocitySensitivity=1.f;
+    float fNoteSensitivity=1.f;
     bool releaseEnabled=false;
     bool consoleAttached=false;
 public:
@@ -33,13 +35,13 @@ public:
     ImGuiPluginDSP()
         : Plugin(kParamCount, 0, 1) // parameters, programs, states
     {
-        if (!GetConsoleWindow()) {
+        if (DEBUG&&!GetConsoleWindow()) {
             initConsoleOutput();
             consoleAttached=true;
         }
         std::vector<float *>levels;
         levels.push_back(&fSpeed);
-        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &releaseEnabled));
+        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &releaseEnabled, &fVelocitySensitivity, &fNoteSensitivity));
         for(int i=0;i<MAX_UNDO_DEPTH;i++)
         {
             undoItems[i]=NULL;
@@ -79,13 +81,34 @@ protected:
     */
     void initParameter(uint32_t index, Parameter& parameter) override
     {
+        if(index==kParamSpeed)
+        {
+            parameter.ranges.min = 0.f;
+            parameter.ranges.max = 1.f;
+            parameter.ranges.def = 1.f;
+            parameter.name = "Speed";
+            parameter.symbol = "speed";
+            parameter.hints=kParameterIsAutomatable;
+        }
+        if(index==kParamVelocitySensitivity)
+        {
+            parameter.ranges.min = 0.f;
+            parameter.ranges.max = 1.f;
+            parameter.ranges.def = 1.f;
+            parameter.name = "Velocity";
+            parameter.symbol = "velocity";
+            parameter.hints=kParameterIsAutomatable;
+        }
+        if(index==kParamNoteSensitivity)
+        {
+            parameter.ranges.min = -1.f;
+            parameter.ranges.max = 1.f;
+            parameter.ranges.def = 1.f;
+            parameter.name = "Midi note";
+            parameter.symbol = "midi note";
+            parameter.hints=kParameterIsAutomatable;
+        }
 
-        parameter.ranges.min = 0.f;
-        parameter.ranges.max = 1.f;
-        parameter.ranges.def = 1.f;
-        parameter.name = "Speed";
-        parameter.symbol = "speed";
-        parameter.hints=kParameterIsAutomatable;
 
     }
 
@@ -94,12 +117,26 @@ protected:
         if(index==kParamSpeed){
             return fSpeed;
         }
+        if(index==kParamVelocitySensitivity){
+            return fVelocitySensitivity;
+        }
+        if(index==kParamNoteSensitivity){
+            return fNoteSensitivity;
+        }
     }
 
 
     void setParameterValue(uint32_t index, float value) override
     {
-        fSpeed = value;
+        if(index==kParamSpeed){
+            fSpeed=value;
+        }
+        if(index==kParamVelocitySensitivity){
+            fVelocitySensitivity=value;
+        }
+        if(index==kParamNoteSensitivity){
+            fNoteSensitivity=value;
+        }
     }
 
     void activate() override
@@ -204,7 +241,7 @@ protected:
         }
     }
 
-    void noteOn(int midiNote, int velocity){
+    void noteOn(int midiNote, float velocity){
         for(int i=0;i<modules.size();i++){
             modules[i]->noteOn(midiNote,velocity);
         }
@@ -221,14 +258,15 @@ protected:
         int midi_message = status & 0xF0;
         int midi_data1 = midiEvent->data[1];
         int midi_data2 = midiEvent->data[2];
-
+        float velocity=(float)midi_data2;
+        velocity/=128.f;
         switch ( midi_message )
         {
         case 0x80: // note_off
             noteOff(midi_data1);
             break;
         case 0x90: // note_on
-            noteOn(midi_data1, midi_data2);
+            noteOn(midi_data1, velocity);
             break;
         }
     }
@@ -278,7 +316,7 @@ protected:
     */
     const char* getDescription() const override
     {
-        return "Sampler with precomputed effects";
+        return "Sampler with spectral editing";
     }
 
     /**

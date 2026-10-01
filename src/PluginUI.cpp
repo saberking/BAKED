@@ -32,7 +32,6 @@ class ImGuiPluginUI : public UI, public FileDropReceiver
     MyOleDropTarget *oleDropTarget=NULL;
     ImPlotContext* imPlotContext[NO_OF_PLOT_CONTEXTS];
     bool editEnvelope=true;
-    int defaultWidth=1335,defaultHeight=890;
     bool isFirstFrame=true;
 public:
 
@@ -43,7 +42,7 @@ public:
 
         // const double scaleFactor = getScaleFactor();
 
-        setSize(defaultWidth,defaultHeight);
+        setSize(DISTRHO_UI_DEFAULT_WIDTH,DISTRHO_UI_DEFAULT_HEIGHT);
 
         if (isResizable())
             fResizeHandle.hide();
@@ -118,23 +117,30 @@ public:
 
 protected:
     void parameterChanged(uint32_t index, float value) override {
-        editor->fSpeed = value;
+        if(index==kParamSpeed){
+            editor->fSpeed = value;
+        }
+        if(index==kParamVelocitySensitivity){
+            editor->fVelocitySensitivity=value;
+        }
+        if(index==kParamNoteSensitivity){
+            editor->fNoteSensitivity=value;
+        }
         repaint();
     }
 
 
 
     void onImGuiDisplay() override {
-        if(isFirstFrame)
-        {
-            setSize(defaultWidth, defaultHeight);
-            isFirstFrame=false;
-        }
+        // if(isFirstFrame)//fix for reaper
+        // {
+        //     setSize(defaultWidth, defaultHeight);
+        //     isFirstFrame=false;
+        // }
 
         const float height = getHeight();
         const float width = getWidth();
 
-        //const float margin = 20.0f * getScaleFactor();
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(width , height ));
