@@ -773,7 +773,7 @@ public:
             }
         }
         int sampleLength=module->sample->length.load(std::memory_order_relaxed);
-        int totalLength=std::min(MAX_SAMPLE_LENGTH,sampleLength+ENVELOPE_LENGTH-1);
+        int totalLength=std::min(MAX_SAMPLE_LENGTH,sampleLength+dspPointer->convolverLength-1);
         module->sample->length.store(totalLength,std::memory_order_relaxed);
         calculateFFT(2);//convolver
 
