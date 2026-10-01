@@ -159,10 +159,13 @@ protected:
 
             // 1. Pack your sizes and channels sequentially into a simple local raw byte array
             size_t headerSize = sizeof(uint32_t);
-            // size_t channelsSize=sizeof(uint32_t);
             size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
             size_t envelopeSize=ENVELOPE_LENGTH*sizeof(float);
-            size_t totalBytes = headerSize + (channelDataSize * 2)/*+channelsSize*/ +envelopeSize;
+            size_t convolverLengthSize=sizeof(float);
+            size_t convolverSize=MAX_SAMPLE_LENGTH*sizeof(float);
+            size_t stereoSize=sizeof(SpeakerConnections);
+            size_t interpolateSize=sizeof(InterpolationMode);
+            size_t totalBytes = headerSize + (channelDataSize * 2) +envelopeSize+convolverLengthSize+convolverSize+stereoSize+interpolateSize;
 
             std::vector<uint8_t> rawBinaryBuffer(totalBytes);
             uint32_t length = static_cast<uint32_t>(modules[0]->sample->length.load(std::memory_order_relaxed));
@@ -186,6 +189,19 @@ protected:
             for (uint32_t i = 0; i < ENVELOPE_LENGTH; ++i) {
                 envelopeDest[i] = modules[0]->envelope[i].load(std::memory_order_relaxed);
             }
+
+            std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2+envelopeSize, &convolverLength, convolverLengthSize);
+
+
+            float *convolverDest=reinterpret_cast<float*>(rawBinaryBuffer.data()+ headerSize + channelDataSize*2+envelopeSize+convolverLengthSize);
+            for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+                convolverDest[i] = (*convolver)[i].load(std::memory_order_relaxed);
+            }
+            InterpolationMode tempMode=interpolationMode.load(std::memory_order_relaxed);
+            std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2+envelopeSize+convolverLengthSize+convolverSize, &tempMode, interpolateSize);
+
+            SpeakerConnections tempConnections=modules[0]->speakerConnections.load(std::memory_order_relaxed);
+            std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2+envelopeSize+convolverLengthSize+convolverSize+interpolateSize, &tempConnections, stereoSize);
 
             // 3. Convert to base64 text string safely
             std::string encodedText = base64_encode(rawBinaryBuffer.data(), rawBinaryBuffer.size());
@@ -215,7 +231,11 @@ protected:
             // 4. Extract data directly out of the remaining decoded data stream
             size_t headerSize = sizeof(uint32_t);
             size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
-            // size_t channelsSize=sizeof(uint32_t);
+            size_t envelopeSize=ENVELOPE_LENGTH*sizeof(float);
+            size_t convolverLengthSize=sizeof(float);
+            size_t convolverSize=MAX_SAMPLE_LENGTH*sizeof(float);
+            size_t stereoSize=sizeof(SpeakerConnections);
+            size_t interpolateSize=sizeof(InterpolationMode);
 
 
             // Create temporary pointers pointing to the raw decoded byte stream
@@ -239,6 +259,22 @@ protected:
                 modules[0]->envelope[i].store(envelopeSrc[i], std::memory_order_relaxed);
 
             }
+
+            std::memcpy(&convolverLength, rawData + headerSize + channelDataSize*2+envelopeSize, sizeof(uint32_t));
+
+            const float *convolverSrc=reinterpret_cast<const float*>(rawData+headerSize+channelDataSize*2+envelopeSize+convolverLengthSize);
+            for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
+                (*convolver)[i].store(convolverSrc[i], std::memory_order_relaxed);
+
+            }
+            InterpolationMode tempMode;
+            std::memcpy(&tempMode, rawData + headerSize + channelDataSize*2+envelopeSize+convolverLengthSize+convolverSize, sizeof(InterpolationMode));
+            interpolationMode.store(tempMode,std::memory_order_relaxed);
+
+            SpeakerConnections tempConnections;
+            std::memcpy(&tempConnections, rawData + headerSize + channelDataSize*2+envelopeSize+convolverLengthSize+convolverSize+interpolateSize, sizeof(SpeakerConnections));
+            modules[0]->speakerConnections.store(tempConnections,std::memory_order_relaxed);
+
             modules[0]->process();
         }
     }
