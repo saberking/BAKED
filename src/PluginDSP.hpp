@@ -18,6 +18,8 @@ class ImGuiPluginDSP : public Plugin
     bool releaseEnabled=false;
     bool consoleAttached=false;
 public:
+    std::atomic<InterpolationMode> interpolationMode;
+
     UndoItem *undoItems[MAX_UNDO_DEPTH];
     int nextUndoIndex=0;
     int undoCount=0,redoCount=0;
@@ -41,7 +43,7 @@ public:
         }
         std::vector<float *>levels;
         levels.push_back(&fSpeed);
-        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &releaseEnabled, &fVelocitySensitivity, &fNoteSensitivity));
+        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &releaseEnabled, &fVelocitySensitivity, &fNoteSensitivity, &interpolationMode));
         for(int i=0;i<MAX_UNDO_DEPTH;i++)
         {
             undoItems[i]=NULL;
@@ -58,7 +60,7 @@ public:
         {
             (*convolver)[i]=0.f;
         }
-
+        interpolationMode.store(interpModeLinear,std::memory_order_relaxed);
 
     }
     ~ImGuiPluginDSP(){

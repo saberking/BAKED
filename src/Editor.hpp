@@ -1072,6 +1072,9 @@ public:
     }
     void displayPlaybackControls()
     {
+        bool interpolate=(dspPointer->interpolationMode.load(std::memory_order_relaxed)==interpModeLinear);
+        ImGui::Checkbox("Interpolate", &interpolate);
+        dspPointer->interpolationMode.store(interpolate?interpModeLinear:interpModeNone, std::memory_order_relaxed);
         ImGui::SetNextItemWidth(-100.f);
         if (ImGui::SliderFloat("Speed", &fSpeed, 0.f, 1.f))
         {

@@ -1,9 +1,4 @@
 
-
-
-
-
-midinote&velocity
 interpolation
 
 Save everything properly

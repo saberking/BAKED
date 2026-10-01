@@ -25,7 +25,6 @@ enum SpeakerConnections{
     speakerRL,
     speakerRR
 };
-
 inline float interpolate(float lower, float upper, float position, InterpolationMode mode)
 {
     if(mode==interpModeNone)
@@ -151,6 +150,7 @@ struct Module {
     bool *releaseEnabled=NULL;
     float *noteSensitivity=NULL;
     float *velocitySensitivity=NULL;
+    std::atomic<InterpolationMode> *interpolationMode=NULL;
     char sampleFilePath[MAX_FILE_PATH_LENGTH];
     std::vector<std::atomic<float>> envelope;
     bool isEnvelopeChanged=false;
@@ -159,13 +159,14 @@ struct Module {
     SamplePlaybackEngineMonophonic * playbackData[MAX_POLY];
 
     Module(std::vector<float *> _levels, float *_releaseSpeed, float *_speed, bool *_releaseEnabled,
-                float *_velocitySensitivity, float *_noteSensitivity):
+           float *_velocitySensitivity, float *_noteSensitivity, std::atomic<InterpolationMode> *_interpolationMode):
         levels(_levels),
         releaseSpeed(_releaseSpeed),
         speed(_speed),
         releaseEnabled(_releaseEnabled),
         velocitySensitivity(_velocitySensitivity),
-        noteSensitivity(_noteSensitivity)
+        noteSensitivity(_noteSensitivity),
+        interpolationMode(_interpolationMode)
     {
         strcpy(sampleFilePath, "Drop sample here...");
         sample=new AudioData(2);
@@ -299,13 +300,24 @@ inline void SamplePlaybackEngineMonophonic::run(float outputs[2], float recipLen
         return;
     }
     float volume=getVelocityValue()*getReleaseValue(recipLength);
-    outputs[0]=outputs[1]=module->processed->sampleData[0][(int)playhead].load(std::memory_order_relaxed)
-                              *volume
+    int lower=(int)playhead;
+    int upper=std::min(MAX_SAMPLE_LENGTH-1,lower+1);
+    float interpolated=interpolate(
+        module->processed->sampleData[0][lower].load(std::memory_order_relaxed),
+        module->processed->sampleData[0][upper].load(std::memory_order_relaxed),
+        playhead,
+        module->interpolationMode->load(std::memory_order_relaxed)
+        );
+    outputs[0]=outputs[1]=interpolated*volume
         ;
     if(module->sample->channels.load(std::memory_order_relaxed)==2){
-        outputs[1]=module->processed->sampleData[1][(int)playhead].load(std::memory_order_relaxed)
-                   *volume
-            ;
+        interpolated=interpolate(
+            module->processed->sampleData[1][lower].load(std::memory_order_relaxed),
+            module->processed->sampleData[1][upper].load(std::memory_order_relaxed),
+            playhead,
+            module->interpolationMode->load(std::memory_order_relaxed)
+            );
+        outputs[1]=interpolated*volume;
     }
     timeStep();
 }
