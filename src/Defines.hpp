@@ -3,7 +3,7 @@
 #define MAX_FILE_PATH_LENGTH 256
 
 #define NO_OF_PLOT_CONTEXTS 12
-#define DEBUG 1
+#define DEBUG 0
 enum DataType{
     dataTypeEnvelope,
     dataTypeConvolver,

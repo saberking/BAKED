@@ -1236,13 +1236,13 @@ public:
         ImPlot::PlotLine("##Horiz1", h_line_x, h_line_y1, 2, bound_spec);
     }
 
-    void configureSmallGraph(float xMax=209.f, float yMin=-0.002f)
+    void configureSmallGraph(float xMax=209.f, float yMin=-0.1f)
     {
         setInputMap();
 
         ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
-        ImPlot::SetupAxisLimits(ImAxis_Y1, yMin, 1.18, ImPlotCond_Always);
-        ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
+        ImPlot::SetupAxisLimits(ImAxis_Y1, yMin, 1.1, ImPlotCond_Always);
+        //ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
 
         ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_NoTickLabels|ImPlotAxisFlags_NoTickMarks);
         ImPlot::SetupAxisLimits(ImAxis_X1, -10.f, 209.f, ImPlotCond_Once);
@@ -1296,7 +1296,7 @@ public:
 
         ImPlot::SetCurrentContext(imPlotContext[6]);
         if(ImPlot::BeginPlot("Convolver##convolverplot",ImVec2(-1.0f, 200.0f))){
-            configureSmallGraph((float)(MAX_SAMPLE_LENGTH+1000), -1.18f);
+            configureSmallGraph((float)(MAX_SAMPLE_LENGTH+1000), -1.1f);
             // std::vector<float> xValues;
             // for(int i=0;i<ENVELOPE_LENGTH;i++)
             // {
