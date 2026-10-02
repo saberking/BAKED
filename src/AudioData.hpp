@@ -133,10 +133,10 @@ struct SamplePlaybackEngineMonophonic {
     inline void stop();
     inline void noteOn(int _midiNote, float _velocity);
     inline void noteOff(int _midiNote);
-    inline void run(float outputs[2], float recipLength, float releaseTimestep);
+    inline void run(float outputs[2], float releaseTimestep);
     SamplePlaybackEngineMonophonic(Module *_module);
-    inline float getReleaseValue(float recipLength);
-    inline float getEnvelopeValue(float recipLength);
+    inline float getReleaseValue();
+    // inline float getEnvelopeValue(float recipLength);
     inline float getVelocityValue();
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SamplePlaybackEngineMonophonic)
@@ -233,17 +233,16 @@ struct Module {
     }
 
     void run(float outputs[2]){
-        float recipLength=0.0002;
-        recipLength=((float)ENVELOPE_LENGTH)/((float)std::max(1,sample->length.load(std::memory_order_relaxed)));
+        float recipLength=((float)ENVELOPE_LENGTH)/((float)std::max(1,sample->length.load(std::memory_order_relaxed)));
 
-        float releaseTimestep=(float)ENVELOPE_LENGTH/(sample->length.load(std::memory_order_relaxed)**releaseLength);
+        float releaseTimestep=recipLength/ *releaseLength;
 
         outputs[0]=outputs[1]=0;
         float tempOuts[2], tempOutsSum[]={0,0};
         for(int i=0;i<MAX_POLY;i++){
             if(playbackData[i]->playing.load(std::memory_order_relaxed))
             {
-                playbackData[i]->run(tempOuts, recipLength, releaseTimestep);
+                playbackData[i]->run(tempOuts, releaseTimestep);
                 tempOutsSum[0]+=tempOuts[0];tempOutsSum[1]+=tempOuts[1];
             }
         }
@@ -259,7 +258,7 @@ struct Module {
 
 inline SamplePlaybackEngineMonophonic::  SamplePlaybackEngineMonophonic(Module *_module):
     module(_module){}
-inline float SamplePlaybackEngineMonophonic::getReleaseValue(float recipLength){
+inline float SamplePlaybackEngineMonophonic::getReleaseValue(){
     if(!playing.load(std::memory_order_relaxed)) return 0;
     if(!released.load(std::memory_order_relaxed)) return 1;
     return module->releaseCurve[(int)releasePlayhead].load(std::memory_order_relaxed);
@@ -267,10 +266,10 @@ inline float SamplePlaybackEngineMonophonic::getReleaseValue(float recipLength){
 inline float SamplePlaybackEngineMonophonic::getVelocityValue(){
     return  1-*(module->velocitySensitivity)+*(module->velocitySensitivity)*velocity.load(std::memory_order_relaxed);
 }
-inline float SamplePlaybackEngineMonophonic::getEnvelopeValue(float recipLength){
-    if(!playing.load(std::memory_order_relaxed)) return 0;
-    return module->envelope[(int)(playhead*recipLength)].load(std::memory_order_relaxed);
-}
+// inline float SamplePlaybackEngineMonophonic::getEnvelopeValue(float recipLength){
+//     if(!playing.load(std::memory_order_relaxed)) return 0;
+//     return module->envelope[(int)(playhead*recipLength)].load(std::memory_order_relaxed);
+// }
 inline void SamplePlaybackEngineMonophonic::timeStep(float releaseTimestep){
     if(playing.load(std::memory_order_relaxed)){
         float newPlayhead=playhead.load(std::memory_order_relaxed)+*(module->speed)*noteSpeed.load(std::memory_order_relaxed);
@@ -310,13 +309,13 @@ inline void SamplePlaybackEngineMonophonic::noteOff(int _midiNote){
         released.store(true,std::memory_order_relaxed);
     }
 }
-inline void SamplePlaybackEngineMonophonic::run(float outputs[2], float recipLength,float releaseTimestep){
+inline void SamplePlaybackEngineMonophonic::run(float outputs[2],float releaseTimestep){
     outputs[0]=outputs[1]=0;
     if(playhead.load(std::memory_order_relaxed)>module->processed->length.load(std::memory_order_relaxed)-1){
         stop();
         return;
     }
-    float volume=getVelocityValue()*getReleaseValue(recipLength);
+    float volume=getVelocityValue()*getReleaseValue();
     int lower=(int)playhead.load(std::memory_order_relaxed);
     int upper=std::min(MAX_SAMPLE_LENGTH-1,lower+1);
     float interpolated=interpolate(
