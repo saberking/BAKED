@@ -369,7 +369,6 @@ protected:
         {
             while ( curEventIndex < midiEventCount && i == midiEvents[curEventIndex].frame )
             {
-
                 handleMidi(&(midiEvents[curEventIndex++]));
 
             }

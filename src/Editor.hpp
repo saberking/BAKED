@@ -1326,6 +1326,8 @@ public:
             ImPlot::EndPlot();
 
         }
+        ImGui::SetNextItemWidth(-100.f);
+
         if(ImGui::SliderFloat ("Length##ReleaseLength",&fReleaseLength, 0.00001f,1.f,"%.5f", ImGuiSliderFlags_Logarithmic))
 
         {
@@ -1447,7 +1449,7 @@ public:
 
 
         float tempLength=length;
-        ImGui::SetNextItemWidth(-150);
+        ImGui::SetNextItemWidth(-100);
         ImGui::SliderFloat ("Length",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
         length=std::max(1, std::min(MAX_SAMPLE_LENGTH,(int)tempLength));
         if(length!=data->length.load(std::memory_order_relaxed))
