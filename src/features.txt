@@ -1,9 +1,4 @@
 
-plotG is slow maybe if it not in order
-
--------------------------------------
-************************************
--------------------------------------
 playstart tool
 pitcher (partial multiply or divide and round)
 stretcher (waveform resample by keeping partials and changing length)
@@ -15,6 +10,13 @@ cossfade tool
 -------------------------------------
 paste strength, multiply mode
 
+stereo blend button
+
+make convolver stereo
+
+****load sample as convolver                         ****
+
+
 
 dice tool
 
@@ -22,18 +24,15 @@ dice tool
 zero tool
 
 
-stereo blend button
 
 
 
 
 
-make convolver stereo
 
 ****zoom tool, leftclick to zoom in right to zoom out****
 ****graph more sensitive to zoom                     ****
 ****xaxis squared scale                              ****
-****load sample as convolver                         ****
 
 --------------------------------
 
