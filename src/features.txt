@@ -1,8 +1,6 @@
 
 plotG is slow maybe if it not in order
-speed >1
-audio performance
-release performance
+
 -------------------------------------
 ************************************
 -------------------------------------

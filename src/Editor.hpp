@@ -34,9 +34,16 @@ START_NAMESPACE_DISTRHO
 #define ZERO_ICON   "\x42"
 #define REDO_ICON   "\x43"
 
-struct PlotAudioContext {
-    AudioData* audioData;
-    int channel;
+
+
+struct ImPlotAtomicContext {
+    std::vector<std::atomic<float>>* vectorPtr;
+    int xMinOffset;
+};
+
+struct ImPlotSpectrumContext {
+    std::vector<std::complex<float>>* vectorPtr;
+    int xMinOffset;
 };
 
 static UINT WM_TRIGGER_CLAP_MENU = 0;
@@ -57,6 +64,8 @@ public:
     Module *module=NULL;
     ImPlotSpec spec;
     ImPlotContext** imPlotContext;
+    ImVec2 plotSize;
+
     std::vector<std::complex<float>> *spectrum[2] ;
     std::vector<std::atomic<float>> *convolver;
 
@@ -124,8 +133,8 @@ public:
         dspPointer=_dSPPointer;
         spec.Flags = ImPlotFlags_CanvasOnly;
         convolver=dspPointer->convolver;
-        // setResizable(true);
-        // setSize(1675,1000);
+
+        plotSize=ImVec2(-1,260);
 
 
 
@@ -276,28 +285,36 @@ public:
 
 
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
-        auto* vec_ptr = static_cast<std::vector<std::atomic<float>>*>(data_ptr);
-        float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
-        return ImPlotPoint(idx, y_val);
+        auto* ctx = static_cast<ImPlotAtomicContext*>(data_ptr);
+
+        int real_idx = idx + ctx->xMinOffset;
+
+        float y_val = (*(ctx->vectorPtr))[real_idx].load(std::memory_order_relaxed);
+        return ImPlotPoint(real_idx, y_val);
     }
 
 
     static ImPlotPoint SpectrumGetter(int idx, void* data_ptr){
-        auto* vec_ptr = static_cast<std::vector<std::complex<float>>*>(data_ptr);
-        float y_val = std::abs((*vec_ptr)[idx]);
-        return ImPlotPoint(idx, y_val);
+        auto* ctx = static_cast<ImPlotSpectrumContext*>(data_ptr);
+
+        int real_idx = idx + ctx->xMinOffset;
+
+        float y_val = std::abs((*ctx->vectorPtr)[real_idx]);
+        return ImPlotPoint(real_idx, y_val);
     }
 
     static ImPlotPoint PhaseGetter(int idx, void* data_ptr){
-        auto* vec_ptr = static_cast<std::vector<std::complex<float>>*>(data_ptr);
-        float y_val = std::arg((*vec_ptr)[idx])+M_PI/2+0.000001;
+        auto* ctx = static_cast<ImPlotSpectrumContext*>(data_ptr);
+
+        int real_idx = idx + ctx->xMinOffset;
+        float y_val = std::arg((*ctx->vectorPtr)[real_idx])+M_PI/2+0.000001;
         if(y_val<0)
         {
             y_val+=2*M_PI;
             //std::cout<<"idx"<<idx<<std::endl<<"yval"<<y_val<<std::endl<<"abs"<<std::abs((*vec_ptr)[idx])<<std::endl;
         }
-        if(std::abs((*vec_ptr)[idx])==0)y_val=-999.f;
-        return ImPlotPoint(idx, y_val);
+        if(std::abs((*ctx->vectorPtr)[real_idx])==0)y_val=-999.f;
+        return ImPlotPoint(real_idx, y_val);
     }
     static ImPlotPoint envelopeGetter(int idx, void* data_ptr) {
         return AtomicVectorGetter(idx, data_ptr);
@@ -308,7 +325,7 @@ public:
 
     }
     static ImPlotPoint convolverGetter(int idx, void* data_ptr) {
-        return AtomicVectorGetter(idx, data_ptr);
+        return AtomicVectorGetter( idx, data_ptr);
 
     }
 
@@ -720,14 +737,12 @@ public:
         }
         module->process();
 
-        if(isLiveUpdate)
+        for(int j=0;j<2;j++)
         {
-            for(int j=0;j<2;j++)
-            {
-                calculateFFT(j);
+            calculateFFT(j);
 
-            }
         }
+
 
     }
     void filter()
@@ -767,10 +782,7 @@ public:
             for(int i=0;i<module->sample->length.load(std::memory_order_relaxed);i++)
                 module->sample->sampleData[j][i].store(module->sample->sampleData[j][i].load(std::memory_order_relaxed)*recip);
             isWaveformChanged[j]=true;
-            if(isLiveUpdate)
-            {
-                calculateFFT(j);
-            }
+            calculateFFT(j);
             module->process();
         }
 
@@ -1278,7 +1290,9 @@ public:
         if(ImPlot::BeginPlot("Envelope",ImVec2(-1.0f, 200.0f))){
             configureSmallGraph();
             drawEnvelopeBox();
-            ImPlot::PlotScatterG("Envelope", envelopeGetter, &dspPointer->modules[0]->envelope, ENVELOPE_LENGTH, spec);
+            ImPlotAtomicContext plotCtx = { &(module->envelope), 0 };
+
+            ImPlot::PlotScatterG("Envelope", envelopeGetter, &plotCtx, ENVELOPE_LENGTH, spec);
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
             {
                 if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser) {
@@ -1307,7 +1321,8 @@ public:
         if(ImPlot::BeginPlot("Release##ReleasePlot",ImVec2(-1.0f, 200.0f))){
             configureSmallGraph();
             drawEnvelopeBox();
-            ImPlot::PlotScatterG("Release", releaseGetter, &dspPointer->releaseCurve, ENVELOPE_LENGTH, spec);
+            ImPlotAtomicContext plotCtx = { &(dspPointer->releaseCurve), 0 };
+            ImPlot::PlotScatterG("Release", releaseGetter, &plotCtx, ENVELOPE_LENGTH, spec);
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
             {
                 if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser) {
@@ -1358,7 +1373,13 @@ public:
                 // {
                 //     xValues.push_back(i);
                 // }
-                ImPlot::PlotScatterG("Convolver", convolverGetter, dspPointer->convolver, dspPointer->convolverLength, spec);
+                ImPlotRect limits = ImPlot::GetPlotLimits();
+
+                int x_min = std::min(dspPointer->convolverLength-1,std::max(0,(int)limits.X.Min));
+                int x_max = std::min(dspPointer->convolverLength-1,std::max(x_min,(int)limits.X.Max));
+
+                ImPlotAtomicContext plotCtx = { dspPointer->convolver, x_min };
+                ImPlot::PlotScatterG("Convolver", convolverGetter, &plotCtx, x_max-x_min+1, spec);
                 if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 {
                     if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
@@ -1433,10 +1454,211 @@ public:
 
     }
 
+    void displayWaveform(int channel)
+    {
+        ImPlot::SetCurrentContext(imPlotContext[channel]);
+        if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L", plotSize)){
+            setInputMap();
 
+            ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
+
+            ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
+            ImPlot::SetupAxisLinks(ImAxis_X1, &waveformXMin, &waveformXMax);
+            ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
+            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -100, MAX_SAMPLE_LENGTH+1000);
+            ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 40, MAX_SAMPLE_LENGTH+2000);
+
+            ImPlotRect limits = ImPlot::GetPlotLimits();
+            int x_min = std::max(0,std::min(data->length.load(std::memory_order_relaxed)-1,(int)limits.X.Min));
+            int x_max = std::min(data->length.load(std::memory_order_relaxed)-1,std::max(x_min,(int)limits.X.Max));
+
+            ImPlotAtomicContext plotCtx = { &(data->sampleData[channel]), x_min };
+
+            ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &plotCtx, x_max-x_min+1, spec);
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
+                if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
+                {
+                    if(isSpectrumChanged[channel])
+                    {
+                        addUndoItem(&(module->sample->sampleData[channel]));
+
+                        calculateWaveform(channel);
+                    }
+                    ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+
+                    handleDrag(
+                        (int)current_pos.x,current_pos.y,
+                        [this]( int x, float y, int channel){
+                            this->selectedButtonIndex==toolbarButtonsEraser?this->eraseWaveform(x,y, channel):this->setWaveformSample(x,y,channel);
+                        },
+                        channel?dataTypeWaveR:dataTypeWaveL,
+                        channel
+                        );
+                    int newLength=std::max(
+                        data->length.load(std::memory_order_relaxed),
+                        std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x+1)
+                        );
+
+                    data->length.store(newLength, std::memory_order_relaxed);
+
+                    if(isLiveUpdate&&isWaveformChanged[channel])
+                    {
+                        calculateFFT(channel);
+                        module->process();
+                    }
+                }
+                if(selectedButtonIndex==toolbarButtonsCopy)
+                {
+                    copy((DataType)(dataTypeWaveL+channel),data->length.load(std::memory_order_relaxed));
+                }
+                if(selectedButtonIndex==toolbarButtonsPaste)
+                {
+                    paste((DataType)(dataTypeWaveL+channel));
+                    isWaveformChanged[channel]=true;
+                    std::cout<<"iswaveformchanged=true"<<std::endl;
+                    if(isLiveUpdate)
+                    {
+                        calculateFFT(channel);
+                        module->process();
+                    }
+
+                }
+            }
+            showPlayhead();
+            ImPlot::EndPlot();
+
+        }
+
+    }
+
+    void displaySpectrum(int channel)
+    {
+        ImPlot::SetCurrentContext(imPlotContext[2+channel]);
+
+        if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L",plotSize)){
+            setInputMap();
+            ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
+            ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
+
+            ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
+            ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
+
+            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
+            ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
+
+            ImPlotRect limits = ImPlot::GetPlotLimits();
+            int x_min = std::max(0,std::min(data->length.load(std::memory_order_relaxed)/2,(int)limits.X.Min));
+            int x_max = std::min(data->length.load(std::memory_order_relaxed)/2,std::max(x_min,(int)limits.X.Max));
+            ImPlotSpectrumContext plotCtx = { spectrum[channel], x_min };
+
+            ImPlot::PlotScatterG("Spectrum", SpectrumGetter, &plotCtx, x_max-x_min, spec);
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
+                if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine)
+                {
+                    if(isWaveformChanged[channel])calculateFFT(channel);
+                    ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                    //(*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
+
+                    handleDrag(
+                        (int)current_pos.x,current_pos.y,
+                        [this](int x, float y, int channel){
+                            this->setSpectrumAmplitude(x,y,channel);
+                        },
+                        channel?dataTypeSpectrumR:dataTypeSpectrumL,
+                        channel
+                        );
+
+                    // int newLength=std::max(
+                    //     data->length.load(std::memory_order_relaxed),
+                    //     std::max(0,std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x*2))
+                    //     );
+
+                    // data->length.store(newLength, std::memory_order_relaxed);
+
+                    if(isLiveUpdate&&isSpectrumChanged[channel])
+                    {
+
+                        calculateWaveform(channel);
+                    }
+
+                }
+                if(selectedButtonIndex==toolbarButtonsCopy)
+                {
+                    copy((DataType)(dataTypeSpectrumL+channel),-1);
+                }
+                if(selectedButtonIndex==toolbarButtonsPaste)
+                {
+                    paste((DataType)(dataTypeSpectrumL+channel));
+                }
+            }
+            ImPlot::EndPlot();
+        }
+
+
+    }
+
+
+    void displayPhase(int channel)
+    {
+        ImPlot::SetCurrentContext(imPlotContext[4+channel]);
+        if (ImPlot::BeginPlot(channel?"Phase R":"Phase L", plotSize)){
+            setInputMap();
+            ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
+
+            ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
+            ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
+            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
+            ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
+
+            ImPlotRect limits = ImPlot::GetPlotLimits();
+            int x_min = std::max(0,std::min(data->length.load(std::memory_order_relaxed)/2,(int)limits.X.Min));
+            int x_max = std::min(data->length.load(std::memory_order_relaxed)/2,std::max(x_min,(int)limits.X.Max));
+            ImPlotSpectrumContext plotCtx = { spectrum[channel], x_min };
+
+            ImPlot::PlotScatterG("Phase", PhaseGetter,&plotCtx, x_max-x_min, spec);
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
+                if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine)
+                {
+                    if(isWaveformChanged[channel])calculateFFT(channel);
+
+                    ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+
+                    handleDrag(
+                        (int)current_pos.x,current_pos.y,
+                        [this](int x, float y, int channel){
+                            this->setSpectrumPhase(x,y,channel);
+                        },
+                        channel?dataTypePhaseR:dataTypePhaseL,
+                        channel
+                        );
+                    if(isLiveUpdate&&isSpectrumChanged[channel])
+                    {
+
+                        calculateWaveform(channel);
+                    }
+                }
+                if(selectedButtonIndex==toolbarButtonsCopy)
+                {
+                    copy((DataType)(dataTypePhaseL+channel),-1);
+                }
+                if(selectedButtonIndex==toolbarButtonsPaste)
+                {
+                    paste((DataType)(dataTypePhaseL+channel));
+                }
+            }
+            ImPlot::EndPlot();
+        }
+
+
+    }
     void displaySample()
     {
-        int plotIndex=0;
 
         length=data->length.load(std::memory_order_relaxed);
 
@@ -1470,188 +1692,14 @@ public:
         }
 
 
-        ImVec2 plotSize(-1,260);
         if (ImGui::BeginTable("SampleTable", isMono?1:2, ImGuiTableFlags_SizingStretchSame|ImGuiTableFlags_Resizable))
         {
             for(int channel=0;channel<1||!isMono&&channel<2;channel++){
                 ImGui::TableNextColumn();
                 if(connections==speakerRR)channel=1;
-                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
-                if(ImPlot::BeginPlot(channel?"Waveform R":"Waveform L", plotSize)){
-                    setInputMap();
-
-                    ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
-                    ImPlot::SetupAxisLimits(ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always);
-
-                    ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
-                    ImPlot::SetupAxisLinks(ImAxis_X1, &waveformXMin, &waveformXMax);
-                    ImPlot::SetupAxisLimits(ImAxis_X1, -1.f, 200.f, ImPlotCond_Once);
-                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -100, MAX_SAMPLE_LENGTH+1000);
-                    ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 40, MAX_SAMPLE_LENGTH+2000);
-
-
-
-                    ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &(data->sampleData[channel]), data->length.load(std::memory_order_relaxed), spec);
-                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                    {
-                        if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
-                        {
-                            if(isSpectrumChanged[channel])
-                            {
-                                addUndoItem(&(module->sample->sampleData[channel]));
-
-                                calculateWaveform(channel);
-                            }
-                            ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-
-                            handleDrag(
-                                (int)current_pos.x,current_pos.y,
-                                [this]( int x, float y, int channel){
-                                    this->selectedButtonIndex==toolbarButtonsEraser?this->eraseWaveform(x,y, channel):this->setWaveformSample(x,y,channel);
-                                },
-                                channel?dataTypeWaveR:dataTypeWaveL,
-                                channel
-                                );
-                            int newLength=std::max(
-                                data->length.load(std::memory_order_relaxed),
-                                std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x+1)
-                                );
-
-                            data->length.store(newLength, std::memory_order_relaxed);
-
-                            if(isLiveUpdate&&isWaveformChanged[channel])
-                            {
-                                calculateFFT(channel);
-                                module->process();
-                            }
-                        }
-                        if(selectedButtonIndex==toolbarButtonsCopy)
-                        {
-                            copy((DataType)(dataTypeWaveL+channel),data->length.load(std::memory_order_relaxed));
-                        }
-                        if(selectedButtonIndex==toolbarButtonsPaste)
-                        {
-                            paste((DataType)(dataTypeWaveL+channel));
-                            isWaveformChanged[channel]=true;
-                            std::cout<<"iswaveformchanged=true"<<std::endl;
-                            if(isLiveUpdate)
-                            {
-                                calculateFFT(channel);
-                                module->process();
-                            }
-
-                        }
-                    }
-                    showPlayhead();
-                    ImPlot::EndPlot();
-
-                }
-
-                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
-
-                if (ImPlot::BeginPlot(channel?"Spectrum R":"Spectrum L",plotSize)){
-                    setInputMap();
-                    ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
-                    ImPlot::SetupAxisLimits(ImAxis_Y1, -0.001, 1.1, ImPlotCond_Always);
-                    ImPlot::SetupAxisScale(ImAxis_Y1, TransformForward_Sqrt, TransformInverse_Sqrt);
-
-                    ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
-                    ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
-
-                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
-                    ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
-
-                    ImPlot::PlotScatterG("Spectrum", SpectrumGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
-                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                    {
-                        if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine)
-                        {
-                            if(isWaveformChanged[channel])calculateFFT(channel);
-                            ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-                            //(*spectrum[channel])[current_pos.x+1]=std::complex(0.f,0.f);
-
-                            handleDrag(
-                                (int)current_pos.x,current_pos.y,
-                                [this](int x, float y, int channel){
-                                    this->setSpectrumAmplitude(x,y,channel);
-                                },
-                                channel?dataTypeSpectrumR:dataTypeSpectrumL,
-                                channel
-                                );
-
-                            // int newLength=std::max(
-                            //     data->length.load(std::memory_order_relaxed),
-                            //     std::max(0,std::min(MAX_SAMPLE_LENGTH, (int)current_pos.x*2))
-                            //     );
-
-                            // data->length.store(newLength, std::memory_order_relaxed);
-
-                            if(isLiveUpdate&&isSpectrumChanged[channel])
-                            {
-
-                                calculateWaveform(channel);
-                            }
-
-                        }
-                        if(selectedButtonIndex==toolbarButtonsCopy)
-                        {
-                            copy((DataType)(dataTypeSpectrumL+channel),-1);
-                        }
-                        if(selectedButtonIndex==toolbarButtonsPaste)
-                        {
-                            paste((DataType)(dataTypeSpectrumL+channel));
-                        }
-                    }
-                    ImPlot::EndPlot();
-                }
-
-
-
-                ImPlot::SetCurrentContext(imPlotContext[plotIndex++]);
-                if (ImPlot::BeginPlot(channel?"Phase R":"Phase L", plotSize)){
-                    setInputMap();
-                    ImPlot::SetupAxis(ImAxis_Y1, "", ImPlotAxisFlags_Lock);
-                    ImPlot::SetupAxisLimits(ImAxis_Y1, -0.3,2*M_PI+0.15, ImPlotCond_Always);
-
-                    ImPlot::SetupAxis(ImAxis_X1, "", ImPlotAxisFlags_None);
-                    ImPlot::SetupAxisLinks(ImAxis_X1, &(spectrumXMin), &(spectrumXMax));
-                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, -50, MAX_SAMPLE_LENGTH/2+500);
-                    ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 20, MAX_SAMPLE_LENGTH/2+1000);
-
-                    ImPlot::PlotScatterG("Phase", PhaseGetter, spectrum[channel], data->length.load(std::memory_order_relaxed)/2+1, spec);
-                    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                    {
-                        if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine)
-                        {
-                            if(isWaveformChanged[channel])calculateFFT(channel);
-
-                            ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-
-                            handleDrag(
-                                (int)current_pos.x,current_pos.y,
-                                [this](int x, float y, int channel){
-                                    this->setSpectrumPhase(x,y,channel);
-                                },
-                                channel?dataTypePhaseR:dataTypePhaseL,
-                                channel
-                                );
-                            if(isLiveUpdate&&isSpectrumChanged[channel])
-                            {
-
-                                calculateWaveform(channel);
-                            }
-                        }
-                        if(selectedButtonIndex==toolbarButtonsCopy)
-                        {
-                            copy((DataType)(dataTypePhaseL+channel),-1);
-                        }
-                        if(selectedButtonIndex==toolbarButtonsPaste)
-                        {
-                            paste((DataType)(dataTypePhaseL+channel));
-                        }
-                    }
-                    ImPlot::EndPlot();
-                }
+                displayWaveform(channel);
+                displaySpectrum(channel);
+                displayPhase(channel);
 
 
             }
