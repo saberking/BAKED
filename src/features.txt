@@ -1,13 +1,17 @@
 
+
+harmonise/noisify (copmress/expand partials)
+partial shift
+-------------------------------------
+************************************
+-------------------------------------
+cossfade tool
+
+
 playstart tool
 
 stretcher (waveform resample by keeping partials and changing length)
 
-cossfade tool
-
--------------------------------------
-************************************
--------------------------------------
 paste strength, multiply mode
 
 stereo blend button
@@ -34,11 +38,6 @@ zero tool
 ****graph more sensitive to zoom                     ****
 ****xaxis squared scale                              ****
 
---------------------------------
-
-
-harmonise/noisify (copmress/expand partials)
-partial shift
 
 -----------------------------------
 ************************************
@@ -61,7 +60,6 @@ when saving, trim zeros
 
 
 show convolver partials/phase
-convolve only partials or only phase or both
 
 HiDPI awareness
 resize UI
