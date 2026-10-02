@@ -363,7 +363,7 @@ protected:
              uint32_t midiEventCount      // Number of MIDI events in block
              ) override
     {
-
+        int pIndex=modules[0]->processedIndex.load(std::memory_order_relaxed);
         int curEventIndex =0;
         for ( uint32_t i = 0; i < frames; i++ )
         {
@@ -375,7 +375,7 @@ protected:
             float tempOut[2];
             outputs[0][i]=outputs[1][i]=0;
             for(int j=0;j<modules.size();j++){
-                modules[j]->run(tempOut);
+                modules[j]->run(tempOut, pIndex);
                 outputs[0][i]+=tempOut[0];outputs[1][i]+=tempOut[1];
             }
 
