@@ -70,7 +70,7 @@ public:
 
         for(int i=0;i<ENVELOPE_LENGTH;i++)
         {
-            releaseCurve[i].store(1.f,std::memory_order_relaxed);
+            releaseCurve[i].store(1.f-(float)i/(float)ENVELOPE_LENGTH,std::memory_order_relaxed);
         }
         interpolationMode.store(interpModeLinear,std::memory_order_relaxed);
 

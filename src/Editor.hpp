@@ -1346,58 +1346,61 @@ public:
 
     void displayConvolver()
     {
-
-        ImPlot::SetCurrentContext(imPlotContext[6]);
-        if(ImPlot::BeginPlot("Convolver##convolverplot",ImVec2(-1.0f, 200.0f))){
-            configureSmallGraph((float)(MAX_SAMPLE_LENGTH+1000), -1.1f);
-            // std::vector<float> xValues;
-            // for(int i=0;i<ENVELOPE_LENGTH;i++)
-            // {
-            //     xValues.push_back(i);
-            // }
-            ImPlot::PlotScatterG("Convolver", convolverGetter, dspPointer->convolver, dspPointer->convolverLength, spec);
-            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-            {
-                if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
+        if(ImGui::CollapsingHeader("Convolver##CollapsingheaderConvolver"))
+        {
+            ImPlot::SetCurrentContext(imPlotContext[6]);
+            if(ImPlot::BeginPlot("Convolver##convolverplot",ImVec2(-1.0f, 200.0f))){
+                configureSmallGraph((float)(MAX_SAMPLE_LENGTH+1000), -1.1f);
+                // std::vector<float> xValues;
+                // for(int i=0;i<ENVELOPE_LENGTH;i++)
+                // {
+                //     xValues.push_back(i);
+                // }
+                ImPlot::PlotScatterG("Convolver", convolverGetter, dspPointer->convolver, dspPointer->convolverLength, spec);
+                if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 {
-                    ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+                    if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
+                    {
+                        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
 
-                    handleDrag(
-                        (int)current_pos.x,current_pos.y,
-                        [this](int x, float y, int dummy){
-                            this->selectedButtonIndex==toolbarButtonsEraser?this->eraseConvolver(x,y):this->setConvolver(x,y);
-                        },
-                        dataTypeConvolver
-                        );
+                        handleDrag(
+                            (int)current_pos.x,current_pos.y,
+                            [this](int x, float y, int dummy){
+                                this->selectedButtonIndex==toolbarButtonsEraser?this->eraseConvolver(x,y):this->setConvolver(x,y);
+                            },
+                            dataTypeConvolver
+                            );
 
+                    }
+                    if(selectedButtonIndex==toolbarButtonsCopy)
+                    {
+                        copy(dataTypeConvolver,dspPointer->convolverLength);
+                    }
+                    if(selectedButtonIndex==toolbarButtonsPaste)
+                    {
+                        paste(dataTypeConvolver);
+                    }
                 }
-                if(selectedButtonIndex==toolbarButtonsCopy)
-                {
-                    copy(dataTypeConvolver,dspPointer->convolverLength);
-                }
-                if(selectedButtonIndex==toolbarButtonsPaste)
-                {
-                    paste(dataTypeConvolver);
-                }
+                ImPlot::EndPlot();
+
             }
-            ImPlot::EndPlot();
+            float tempLength=dspPointer->convolverLength;
+            ImGui::SetNextItemWidth(-100);
+            ImGui::SliderFloat ("Length##Convolver",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
+            length=std::max(1, std::min(MAX_SAMPLE_LENGTH,(int)tempLength));
+            if(length!=dspPointer->convolverLength)
+            {
+                dspPointer->convolverLength=length;
+                setDirty();
 
-        }
-        float tempLength=dspPointer->convolverLength;
-        ImGui::SetNextItemWidth(-150);
-        ImGui::SliderFloat ("Length##Convolver",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
-        length=std::max(1, std::min(MAX_SAMPLE_LENGTH,(int)tempLength));
-        if(length!=dspPointer->convolverLength)
-        {
-            dspPointer->convolverLength=length;
-            setDirty();
+            }
 
+            if(ImGui::Button("Convolve"))
+            {
+                convolve();
+            }
         }
 
-        if(ImGui::Button("Convolve"))
-        {
-            convolve();
-        }
 
     }
 
