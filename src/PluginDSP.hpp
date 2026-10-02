@@ -15,6 +15,7 @@ class ImGuiPluginDSP : public Plugin
     float fSpeed = 1.0f;
     float fVelocitySensitivity=1.f;
     float fNoteSensitivity=1.f;
+    float fReleaseLength=0.25f;
     bool consoleAttached=false;
 public:
     std::atomic<bool> isReleaseEnabled=true;
@@ -46,7 +47,7 @@ public:
         }
         std::vector<float *>levels;
         levels.push_back(&fSpeed);
-        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &isReleaseEnabled, &fVelocitySensitivity,
+        modules.push_back(new Module(levels, &fReleaseLength, &fSpeed, &isReleaseEnabled, &fVelocitySensitivity,
                                      &fNoteSensitivity, &interpolationMode, releaseCurve));
         for(int i=0;i<MAX_UNDO_DEPTH;i++)
         {
@@ -121,6 +122,15 @@ protected:
             parameter.symbol = "midi note";
             parameter.hints=kParameterIsAutomatable;
         }
+        if(index==kParamReleaseLength)
+        {
+            parameter.ranges.min = 0.000001f;
+            parameter.ranges.max = 1.f;
+            parameter.ranges.def = 0.25f;
+            parameter.name = "Release length";
+            parameter.symbol = "Release length";
+            parameter.hints=kParameterIsAutomatable;
+        }
 
 
     }
@@ -136,6 +146,9 @@ protected:
         if(index==kParamNoteSensitivity){
             return fNoteSensitivity;
         }
+        if(index==kParamReleaseLength){
+            return fReleaseLength;
+        }
     }
 
 
@@ -149,6 +162,9 @@ protected:
         }
         if(index==kParamNoteSensitivity){
             fNoteSensitivity=value;
+        }
+        if(index==kParamReleaseLength){
+            fReleaseLength=value;
         }
     }
 

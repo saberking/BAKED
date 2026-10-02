@@ -125,6 +125,9 @@ protected:
         if(index==kParamNoteSensitivity){
             editor->fNoteSensitivity=value;
         }
+        if(index==kParamReleaseLength){
+            editor->fReleaseLength=value;
+        }
         repaint();
     }
 

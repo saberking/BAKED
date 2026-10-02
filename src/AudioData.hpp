@@ -146,7 +146,7 @@ struct Module {
     AudioData *sample=NULL, *processed=NULL;
     std::vector<float*> levels;
     std::vector<std::atomic<float>> &releaseCurve;
-    float *releaseSpeed=NULL;
+    float *releaseLength=NULL;
     float *speed=NULL;
     std::atomic<bool> *releaseEnabled=NULL;
     float *noteSensitivity=NULL;
@@ -161,7 +161,7 @@ struct Module {
 
     Module(
         std::vector<float *> _levels,
-        float *_releaseSpeed,
+        float *_releaseLength,
         float *_speed,
         std::atomic<bool> *_releaseEnabled,
         float *_velocitySensitivity,
@@ -169,7 +169,7 @@ struct Module {
         std::atomic<InterpolationMode> *_interpolationMode,
         std::vector<std::atomic<float>>&_releaseCurve):
         levels(_levels),
-        releaseSpeed(_releaseSpeed),
+        releaseLength(_releaseLength),
         speed(_speed),
         releaseEnabled(_releaseEnabled),
         velocitySensitivity(_velocitySensitivity),
@@ -235,7 +235,7 @@ struct Module {
         float recipLength=0.0002;
         recipLength=((float)ENVELOPE_LENGTH)/((float)std::max(1,sample->length.load(std::memory_order_relaxed)));
 
-        float releaseTimestep=*releaseSpeed*ENVELOPE_LENGTH/sample->length.load(std::memory_order_relaxed);
+        float releaseTimestep=ENVELOPE_LENGTH/(sample->length.load(std::memory_order_relaxed)**releaseLength);
 
         outputs[0]=outputs[1]=0;
         float tempOuts[2], tempOutsSum[]={0,0};

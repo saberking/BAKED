@@ -7,6 +7,7 @@ enum Parameters {
     kParamSpeed = 0,
     kParamNoteSensitivity,
     kParamVelocitySensitivity,
+    kParamReleaseLength,
     kParamCount
 };
 END_NAMESPACE_DISTRHO

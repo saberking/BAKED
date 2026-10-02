@@ -82,6 +82,7 @@ public:
     float fSpeed = 1.f;
     float fNoteSensitivity=1.f;
     float fVelocitySensitivity=1.f;
+    float fReleaseLength=0.25f;
     ImGuiPluginDSP *dspPointer;
     Window *parentWindow;
     enum ToolbarButtons{
@@ -1224,6 +1225,7 @@ public:
         {
             displayRelease();
         }
+
     }
 
     void drawEnvelopeBox()
@@ -1324,20 +1326,26 @@ public:
             ImPlot::EndPlot();
 
         }
+        if(ImGui::SliderFloat ("Length##ReleaseLength",&fReleaseLength, 0.00001f,1.f,"%.5f", ImGuiSliderFlags_Logarithmic))
+
+        {
+            if (ImGui::IsItemActivated())
+            {
+                editParameter(kParamReleaseLength, true);
+            }
+            fReleaseLength=std::max(0.00001f,std::min(1.f,fReleaseLength));
+
+            setParameterValue(kParamReleaseLength, fReleaseLength);
+        }
+        enableRightClick(kParamReleaseLength);
+        if (ImGui::IsItemDeactivated())
+        {
+            editParameter(kParamReleaseLength, false);
+        }
     }
 
     void displayConvolver()
     {
-        float tempLength=dspPointer->convolverLength;
-        ImGui::SetNextItemWidth(-150);
-        ImGui::SliderFloat ("Length##Convolver",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
-        length=std::max(1, std::min(MAX_SAMPLE_LENGTH,(int)tempLength));
-        if(length!=dspPointer->convolverLength)
-        {
-            dspPointer->convolverLength=length;
-            setDirty();
-
-        }
 
         ImPlot::SetCurrentContext(imPlotContext[6]);
         if(ImPlot::BeginPlot("Convolver##convolverplot",ImVec2(-1.0f, 200.0f))){
@@ -1375,6 +1383,17 @@ public:
             ImPlot::EndPlot();
 
         }
+        float tempLength=dspPointer->convolverLength;
+        ImGui::SetNextItemWidth(-150);
+        ImGui::SliderFloat ("Length##Convolver",&tempLength, 1,MAX_SAMPLE_LENGTH, "%.0f", ImGuiSliderFlags_Logarithmic);
+        length=std::max(1, std::min(MAX_SAMPLE_LENGTH,(int)tempLength));
+        if(length!=dspPointer->convolverLength)
+        {
+            dspPointer->convolverLength=length;
+            setDirty();
+
+        }
+
         if(ImGui::Button("Convolve"))
         {
             convolve();
