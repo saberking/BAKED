@@ -1,5 +1,11 @@
 
+plotG is slow maybe if it not in order
 
+playstart tool
+pitcher (partial multiply or divide and round)
+stretcher (waveform resample by keeping partials and changing length)
+
+cossfade tool
 
 -------------------------------------
 ************************************
@@ -16,7 +22,6 @@ zero tool
 stereo blend button
 
 
-playstart tool
 
 
 
@@ -29,8 +34,7 @@ make convolver stereo
 
 --------------------------------
 
-pitcher (partial multiply or divide and round)
-stretcher (waveform resample by keeping partials and changing length)
+
 harmonise/noisify (copmress/expand partials)
 partial shift
 
@@ -50,7 +54,6 @@ save preset
 
 trim sample to length button
 when saving, trim zeros
-plotG is slow maybe if it not in order
 
 -------------------------------------
 
@@ -68,7 +71,6 @@ resize UI
 add another module
 
 
-cossfade tool
 
 
 that special evenly spaced math phase tool
