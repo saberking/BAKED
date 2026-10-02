@@ -1,6 +1,6 @@
 
 playstart tool
-pitcher (partial multiply or divide and round)
+
 stretcher (waveform resample by keeping partials and changing length)
 
 cossfade tool
