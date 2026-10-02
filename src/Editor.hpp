@@ -275,8 +275,8 @@ public:
 
 
     static ImPlotPoint AtomicVectorGetter(int idx, void* data_ptr) {
-        auto* vec_ptr = static_cast<PlotAudioContext*>(data_ptr);
-        float y_val = vec_ptr->audioData->sampleData[vec_ptr->channel][idx].load(std::memory_order_relaxed);
+        auto* vec_ptr = static_cast<std::vector<std::atomic<float>>*>(data_ptr);
+        float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
         return ImPlotPoint(idx, y_val);
     }
 
@@ -299,14 +299,16 @@ public:
         return ImPlotPoint(idx, y_val);
     }
     static ImPlotPoint envelopeGetter(int idx, void* data_ptr) {
-        auto* vec_ptr = static_cast<std::vector<std::atomic<float>>*>(data_ptr);
-        float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
-        return ImPlotPoint(idx, y_val);
+        return AtomicVectorGetter(idx, data_ptr);
+
+    }
+    static ImPlotPoint releaseGetter(int idx, void* data_ptr) {
+        return AtomicVectorGetter(idx, data_ptr);
+
     }
     static ImPlotPoint convolverGetter(int idx, void* data_ptr) {
-        auto* vec_ptr = static_cast<std::vector<std::atomic<float>>*>(data_ptr);
-        float y_val = (*vec_ptr)[idx].load(std::memory_order_relaxed);
-        return ImPlotPoint(idx, y_val);
+        return AtomicVectorGetter(idx, data_ptr);
+
     }
 
 
@@ -495,6 +497,12 @@ public:
         module->envelope[x].store(std::max(0.f,std::min(1.f,y)), std::memory_order_relaxed);
         setDirty();
     }
+    void setRelease(int x, float y)
+    {
+        if(x<0||x>=ENVELOPE_LENGTH) return;
+        dspPointer->releaseCurve[x].store(std::max(0.f,std::min(1.f,y)), std::memory_order_relaxed);
+        setDirty();
+    }
     void setConvolver(int x, float y)
     {
         if(x<0||x>=MAX_SAMPLE_LENGTH) return;
@@ -554,6 +562,12 @@ public:
         int end=std::max(0,std::min(ENVELOPE_LENGTH-1,x));
         erase(module->envelope,start,end);
     }
+    void eraseRelease(int x, float y)
+    {
+        int start=std::max(0,std::min(ENVELOPE_LENGTH-1,dragStartX));
+        int end=std::max(0,std::min(ENVELOPE_LENGTH-1,x));
+        erase(dspPointer->releaseCurve,start,end);
+    }
     void eraseConvolver(int x, float y)
     {
         int start=std::max(0,std::min(MAX_SAMPLE_LENGTH-1,dragStartX));
@@ -609,9 +623,6 @@ public:
             }
             if(isLiveUpdate)module->process();
             isDragging=false;
-
-
-
         }
     }
     void addDragUndoItem(DataType type)
@@ -624,6 +635,8 @@ public:
             addUndoItem(&(module->envelope));
         if(type==dataTypeConvolver)
             addUndoItem(convolver);
+        if(type==dataTypeRelease)
+            addUndoItem(&(dspPointer->releaseCurve));
         addLiveUpdateUndoItem(type);
     }
     void addLiveUpdateUndoItem(DataType type)
@@ -805,24 +818,25 @@ public:
         tempRedoPtr->shouldContinue=item->shouldContinue;
         return tempRedoPtr;
     }
-    DataType getUndoItemDataType(UndoItem *item)
-    {
-        std::cout<<"getundoitemdatatype "<<item->isAtomic<<std::endl;
+    // DataType getUndoItemDataType(UndoItem *item)
+    // {
+    //     std::cout<<"getundoitemdatatype "<<item->isAtomic<<std::endl;
 
-        if(item->atomicDataPtr==convolver) return dataTypeConvolver;
-        if(item->atomicDataPtr==&(module->envelope)) return dataTypeEnvelope;
+    //     if(item->atomicDataPtr==convolver) return dataTypeConvolver;
+    //     if(item->atomicDataPtr==&(module->envelope)) return dataTypeEnvelope;
 
-        if(item->atomicDataPtr==&(module->sample->sampleData[0])) return dataTypeWaveL;
-        if(item->atomicDataPtr==&(module->sample->sampleData[1])) return dataTypeWaveR;
-    }
+    //     if(item->atomicDataPtr==&(module->sample->sampleData[0])) return dataTypeWaveL;
+    //     if(item->atomicDataPtr==&(module->sample->sampleData[1])) return dataTypeWaveR;
+
+    // }
     void undo()
     {
         dspPointer->undoCount=std::max(0,dspPointer->undoCount-1);
         dspPointer->redoCount=std::min(MAX_UNDO_DEPTH-2,dspPointer->redoCount+1);
 
         int currentIndex=(dspPointer->nextUndoIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
-        DataType type=getUndoItemDataType(undoItems[currentIndex]);
-        std::cout<<"undo "<<currentIndex<<" type: "<< type<<std::endl;
+        // DataType type=getUndoItemDataType(undoItems[currentIndex]);
+        // std::cout<<"undo "<<currentIndex<<" type: "<< type<<std::endl;
 
         int lastIndex=(currentIndex-1+MAX_UNDO_DEPTH)%MAX_UNDO_DEPTH;
 
@@ -929,7 +943,7 @@ public:
             // std::cout<<i<<std::endl;
         }
     }
-    std::vector<std::atomic<float>>*getData(DataType type)
+    std::vector<std::atomic<float>>*getWaveformData(DataType type)
     {
         std::vector<std::atomic<float>> *copyData;
         if(type==dataTypeWaveL)
@@ -973,8 +987,8 @@ public:
         else
         {
             std::vector<std::atomic<float>> *copyData, *targetData;
-            copyData=getData(copyDataType);
-            targetData=getData(dataType);
+            copyData=getWaveformData(copyDataType);
+            targetData=getWaveformData(dataType);
             copyAtomicVector(targetData, copyData);
             if(dataType==dataTypeConvolver) dspPointer->convolverLength=std::max(dspPointer->convolverLength, copyLength);
 
@@ -1203,7 +1217,13 @@ public:
         {
             editParameter(kParamNoteSensitivity, false);
         }
-
+        bool isReleaseEnabled=dspPointer->isReleaseEnabled.load(std::memory_order_relaxed);
+        ImGui::Checkbox("Release##ReleaseCheckbox",&isReleaseEnabled);
+        dspPointer->isReleaseEnabled.store(isReleaseEnabled,std::memory_order_relaxed);
+        if(isReleaseEnabled)
+        {
+            displayRelease();
+        }
     }
 
     void drawEnvelopeBox()
@@ -1274,6 +1294,31 @@ public:
                     // {
                     //     module->process();
                     // }
+                }
+            }
+            ImPlot::EndPlot();
+
+        }
+    }
+    void displayRelease(){
+        ImPlot::SetCurrentContext(imPlotContext[7]);
+        if(ImPlot::BeginPlot("Release##ReleasePlot",ImVec2(-1.0f, 200.0f))){
+            configureSmallGraph();
+            drawEnvelopeBox();
+            ImPlot::PlotScatterG("Release", releaseGetter, &dspPointer->releaseCurve, ENVELOPE_LENGTH, spec);
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
+                if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser) {
+                    ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+
+                    handleDrag(
+                        (int)current_pos.x,current_pos.y,
+                        [this](int x, float y, int dummy){
+                            this->selectedButtonIndex==toolbarButtonsEraser?this->eraseRelease(x,y):this->setRelease(x,y);
+                        },
+                        dataTypeRelease
+                        );
+
                 }
             }
             ImPlot::EndPlot();
@@ -1421,8 +1466,8 @@ public:
                     ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 40, MAX_SAMPLE_LENGTH+2000);
 
 
-                    PlotAudioContext plotAudioContext { data, channel };
-                    ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &plotAudioContext, data->length.load(std::memory_order_relaxed), spec);
+
+                    ImPlot::PlotScatterG("Waveform", AtomicVectorGetter, &(data->sampleData[channel]), data->length.load(std::memory_order_relaxed), spec);
                     if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
                     {
                         if(selectedButtonIndex==toolbarButtonsPencil||selectedButtonIndex==toolbarButtonsLine||selectedButtonIndex==toolbarButtonsEraser)
@@ -1648,25 +1693,7 @@ public:
 
     }
 
-    // void onImGuiDisplay() override{
 
-    //     ImGui::PushID(this);
-
-    //     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    //     ImGui::SetNextWindowSize(ImVec2(getWidth(), getHeight()));
-
-    //     if(!data)return;
-    //     if (ImGui::Begin("Waveform Analysis", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)){
-    //         display();
-
-
-    //     }
-    //     if(isVisible()&&!ImGui::IsMouseDown(ImGuiMouseButton_Left)) isDragging=false;
-
-    //     ImGui::End();
-    //     ImGui::PopID();
-
-    // }
     ~SampleEditor(){
         for(int i=0;i<4;i++){
             ImPlot::DestroyContext(imPlotContext[i]);

@@ -15,9 +15,10 @@ class ImGuiPluginDSP : public Plugin
     float fSpeed = 1.0f;
     float fVelocitySensitivity=1.f;
     float fNoteSensitivity=1.f;
-    bool releaseEnabled=false;
     bool consoleAttached=false;
 public:
+    std::atomic<bool> isReleaseEnabled=true;
+
     std::atomic<InterpolationMode> interpolationMode;
 
     UndoItem *undoItems[MAX_UNDO_DEPTH];
@@ -27,6 +28,8 @@ public:
     std::vector<std::atomic<float>> *convolver;
 
     int convolverLength=200;
+
+    std::vector<std::atomic<float>> releaseCurve;
 
     std::vector<Module *> modules;//pointless to have more than one.
                                 // polyphonic effects should be baked in and monophonic can be separate plugins
@@ -43,7 +46,8 @@ public:
         }
         std::vector<float *>levels;
         levels.push_back(&fSpeed);
-        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &releaseEnabled, &fVelocitySensitivity, &fNoteSensitivity, &interpolationMode));
+        modules.push_back(new Module(levels, &fSpeed, &fSpeed, &isReleaseEnabled, &fVelocitySensitivity,
+                                     &fNoteSensitivity, &interpolationMode, releaseCurve));
         for(int i=0;i<MAX_UNDO_DEPTH;i++)
         {
             undoItems[i]=NULL;
@@ -59,6 +63,13 @@ public:
         for(int i=0;i<MAX_SAMPLE_LENGTH;i++)
         {
             (*convolver)[i]=0.f;
+        }
+
+        releaseCurve=std::vector<std::atomic<float>>(ENVELOPE_LENGTH);
+
+        for(int i=0;i<ENVELOPE_LENGTH;i++)
+        {
+            releaseCurve[i].store(1.f,std::memory_order_relaxed);
         }
         interpolationMode.store(interpModeLinear,std::memory_order_relaxed);
 
@@ -158,50 +169,64 @@ protected:
         {
 
             // 1. Pack your sizes and channels sequentially into a simple local raw byte array
-            size_t headerSize = sizeof(uint32_t);
+            size_t lengthSize = sizeof(uint32_t);
             size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
             size_t envelopeSize=ENVELOPE_LENGTH*sizeof(float);
             size_t convolverLengthSize=sizeof(float);
             size_t convolverSize=MAX_SAMPLE_LENGTH*sizeof(float);
             size_t stereoSize=sizeof(SpeakerConnections);
             size_t interpolateSize=sizeof(InterpolationMode);
-            size_t totalBytes = headerSize + (channelDataSize * 2) +envelopeSize+convolverLengthSize+convolverSize+stereoSize+interpolateSize;
+            size_t releaseSize=sizeof(float)*ENVELOPE_LENGTH;
+            size_t totalBytes = lengthSize + (channelDataSize * 2) +envelopeSize+convolverLengthSize+convolverSize+
+                                stereoSize+interpolateSize+releaseSize;
 
             std::vector<uint8_t> rawBinaryBuffer(totalBytes);
+            auto *incrementalPointer=rawBinaryBuffer.data();
+
             uint32_t length = static_cast<uint32_t>(modules[0]->sample->length.load(std::memory_order_relaxed));
+            std::memcpy(rawBinaryBuffer.data(), &length, lengthSize);
+            incrementalPointer += lengthSize;
 
-            std::memcpy(rawBinaryBuffer.data(), &length, headerSize);
-
-            float* leftDest = reinterpret_cast<float*>(rawBinaryBuffer.data() + headerSize);
+            float* leftDest = reinterpret_cast<float*>(incrementalPointer);
             for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
                 leftDest[i] = modules[0]->sample->sampleData[0][i].load(std::memory_order_relaxed);
             }
+            incrementalPointer+=channelDataSize;
 
-            float* rightDest = reinterpret_cast<float*>(rawBinaryBuffer.data() + headerSize + channelDataSize);
+            float* rightDest = reinterpret_cast<float*>(incrementalPointer);
             for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
                 rightDest[i] = modules[0]->sample->sampleData[1][i].load(std::memory_order_relaxed);
             }
+            incrementalPointer+=channelDataSize;
 
-            // uint32_t channels = static_cast<uint32_t>(modules[0]->sample->channels.load(std::memory_order_relaxed));
-            // std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2, &channels, channelsSize);
-
-            float *envelopeDest=reinterpret_cast<float*>(rawBinaryBuffer.data()+headerSize+channelDataSize*2/*+channelsSize*/);
+            float *envelopeDest=reinterpret_cast<float*>(incrementalPointer);
             for (uint32_t i = 0; i < ENVELOPE_LENGTH; ++i) {
                 envelopeDest[i] = modules[0]->envelope[i].load(std::memory_order_relaxed);
             }
+            incrementalPointer+=envelopeSize;
 
-            std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2+envelopeSize, &convolverLength, convolverLengthSize);
+            std::memcpy(incrementalPointer, &convolverLength, convolverLengthSize);
+            incrementalPointer+=convolverLengthSize;
 
-
-            float *convolverDest=reinterpret_cast<float*>(rawBinaryBuffer.data()+ headerSize + channelDataSize*2+envelopeSize+convolverLengthSize);
+            float *convolverDest=reinterpret_cast<float*>(incrementalPointer);
             for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
                 convolverDest[i] = (*convolver)[i].load(std::memory_order_relaxed);
             }
+            incrementalPointer+=convolverSize;
+
             InterpolationMode tempMode=interpolationMode.load(std::memory_order_relaxed);
-            std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2+envelopeSize+convolverLengthSize+convolverSize, &tempMode, interpolateSize);
+            std::memcpy(incrementalPointer, &tempMode, interpolateSize);
+            incrementalPointer+=interpolateSize;
 
             SpeakerConnections tempConnections=modules[0]->speakerConnections.load(std::memory_order_relaxed);
-            std::memcpy(rawBinaryBuffer.data() + headerSize + channelDataSize*2+envelopeSize+convolverLengthSize+convolverSize+interpolateSize, &tempConnections, stereoSize);
+            std::memcpy(incrementalPointer, &tempConnections, stereoSize);
+            incrementalPointer+=stereoSize;
+
+            float *releaseDest=reinterpret_cast<float*>(incrementalPointer);
+            for (uint32_t i = 0; i < ENVELOPE_LENGTH; ++i) {
+                releaseDest[i] = releaseCurve[i].load(std::memory_order_relaxed);
+            }
+            incrementalPointer+=releaseSize;
 
             // 3. Convert to base64 text string safely
             std::string encodedText = base64_encode(rawBinaryBuffer.data(), rawBinaryBuffer.size());
@@ -215,65 +240,72 @@ protected:
         {
             if (strlen(value) == 0 ) {
                 return;
-            }
-
-            std::string decodedBytes = base64_decode(std::string(value));
-
-            const uint8_t* rawData = reinterpret_cast<const uint8_t*>(decodedBytes.data());
-
-            // 2. Read the sample length header out of the first 4 bytes
-            uint32_t length;
-            std::memcpy(&length, rawData, sizeof(uint32_t));
-
-
-            modules[0]->sample->length.store(length, std::memory_order_relaxed);
-
+            }            
             // 4. Extract data directly out of the remaining decoded data stream
-            size_t headerSize = sizeof(uint32_t);
+            size_t lengthSize = sizeof(uint32_t);
             size_t channelDataSize = MAX_SAMPLE_LENGTH * sizeof(float);
             size_t envelopeSize=ENVELOPE_LENGTH*sizeof(float);
-            size_t convolverLengthSize=sizeof(float);
+            size_t convolverLengthSize=sizeof(uint32_t);
             size_t convolverSize=MAX_SAMPLE_LENGTH*sizeof(float);
             size_t stereoSize=sizeof(SpeakerConnections);
             size_t interpolateSize=sizeof(InterpolationMode);
+            size_t releaseSize=MAX_SAMPLE_LENGTH*sizeof(float);
+
+            std::string decodedBytes = base64_decode(std::string(value));
+
+            const uint8_t* incrementalPointer = reinterpret_cast<const uint8_t*>(decodedBytes.data());
+
+            // 2. Read the sample length header out of the first 4 bytes
+            uint32_t length;
+            std::memcpy(&length, incrementalPointer, sizeof(uint32_t));
+            modules[0]->sample->length.store(length, std::memory_order_relaxed);
+            incrementalPointer+=lengthSize;
 
 
-            // Create temporary pointers pointing to the raw decoded byte stream
-            const float* leftSrc = reinterpret_cast<const float*>(rawData + headerSize);
-            const float* rightSrc = reinterpret_cast<const float*>(rawData + headerSize + channelDataSize);
 
-            // Safely write the standard floats back into your std::atomic<float> vectors
+
+            const float* leftSrc = reinterpret_cast<const float*>(incrementalPointer);
             for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
                 modules[0]->sample->sampleData[0][i].store(leftSrc[i], std::memory_order_relaxed);
             }
+            incrementalPointer+=channelDataSize;
+
+            const float* rightSrc = reinterpret_cast<const float*>(incrementalPointer);
             for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
                 modules[0]->sample->sampleData[1][i].store(rightSrc[i], std::memory_order_relaxed);
             }
+            incrementalPointer+=channelDataSize;
 
-            // uint32_t channels;
-            // std::memcpy(&channels, rawData + headerSize + channelDataSize*2, sizeof(uint32_t));
-            // modules[0]->sample->channels.store(channels, std::memory_order_relaxed);
-
-            const float *envelopeSrc=reinterpret_cast<const float*>(rawData+headerSize+channelDataSize*2/*+channelsSize*/);
+            const float *envelopeSrc=reinterpret_cast<const float*>(incrementalPointer);
             for (uint32_t i = 0; i < ENVELOPE_LENGTH; ++i) {
                 modules[0]->envelope[i].store(envelopeSrc[i], std::memory_order_relaxed);
-
             }
+            incrementalPointer+=envelopeSize;
 
-            std::memcpy(&convolverLength, rawData + headerSize + channelDataSize*2+envelopeSize, sizeof(uint32_t));
+            std::memcpy(&convolverLength, incrementalPointer, convolverLengthSize);
+            incrementalPointer+=convolverLengthSize;
 
-            const float *convolverSrc=reinterpret_cast<const float*>(rawData+headerSize+channelDataSize*2+envelopeSize+convolverLengthSize);
+            const float *convolverSrc=reinterpret_cast<const float*>(incrementalPointer);
             for (uint32_t i = 0; i < MAX_SAMPLE_LENGTH; ++i) {
                 (*convolver)[i].store(convolverSrc[i], std::memory_order_relaxed);
-
             }
+            incrementalPointer+=convolverSize;
+
             InterpolationMode tempMode;
-            std::memcpy(&tempMode, rawData + headerSize + channelDataSize*2+envelopeSize+convolverLengthSize+convolverSize, sizeof(InterpolationMode));
+            std::memcpy(&tempMode, incrementalPointer, interpolateSize);
             interpolationMode.store(tempMode,std::memory_order_relaxed);
+            incrementalPointer+=interpolateSize;
 
             SpeakerConnections tempConnections;
-            std::memcpy(&tempConnections, rawData + headerSize + channelDataSize*2+envelopeSize+convolverLengthSize+convolverSize+interpolateSize, sizeof(SpeakerConnections));
+            std::memcpy(&tempConnections, incrementalPointer , stereoSize);
             modules[0]->speakerConnections.store(tempConnections,std::memory_order_relaxed);
+            incrementalPointer+=stereoSize;
+
+            const float *releaseSrc=reinterpret_cast<const float*>(incrementalPointer);
+            for (uint32_t i = 0; i < ENVELOPE_LENGTH; ++i) {
+                releaseCurve[i].store(releaseSrc[i], std::memory_order_relaxed);
+            }
+            incrementalPointer+=releaseSize;
 
             modules[0]->process();
         }

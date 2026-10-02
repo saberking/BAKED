@@ -3,7 +3,7 @@
 #define MAX_FILE_PATH_LENGTH 256
 
 #define NO_OF_PLOT_CONTEXTS 12
-#define DEBUG 0
+#define DEBUG 1
 enum DataType{
     dataTypeEnvelope,
     dataTypeConvolver,
@@ -13,6 +13,7 @@ enum DataType{
     dataTypeSpectrumR,
     dataTypePhaseL,
     dataTypePhaseR,
+    dataTypeRelease,
     dataTypeNone
 };
 #endif // DEFINES_HPP
