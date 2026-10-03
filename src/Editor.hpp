@@ -781,7 +781,6 @@ public:
             float recip=1/max;
             for(int i=0;i<module->sample->length.load(std::memory_order_relaxed);i++)
                 module->sample->sampleData[j][i].store(module->sample->sampleData[j][i].load(std::memory_order_relaxed)*recip);
-            isWaveformChanged[j]=true;
             calculateFFT(j);
             module->process();
         }
@@ -818,9 +817,21 @@ public:
 
 
         }
+    }
 
-
-
+    void noisify()
+    {
+        for(int i=0;i<2;i++)
+        {
+            addUndoItem(&(module->sample->sampleData[i]),i==1);
+            if(isWaveformChanged[i]) calculateFFT(i);
+            int length=data->length.load(std::memory_order_relaxed)/2+1;
+            for(int j=0;j<length;j++)
+            {
+                (*spectrum[i])[j]=std::polar<float>(std::sqrt(std::abs((*spectrum[i])[j])),std::arg((*spectrum[i])[j]));
+            }
+            calculateWaveform(i);
+        }
     }
     UndoItem *copyUndoItem(UndoItem *item)
     {
@@ -1439,7 +1450,6 @@ public:
             compress();
         }
         ImGui::Separator();
-
         if(ImGui::Button("Filter"))
         {
             filter();
@@ -1449,7 +1459,13 @@ public:
         {
             normalise();
         }
+        ImGui::Separator();
 
+
+        if(ImGui::Button("Noisify"))
+        {
+            noisify();
+        }
 
 
     }
